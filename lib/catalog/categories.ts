@@ -1,0 +1,244 @@
+/**
+ * PC Component Categories
+ * Defines the categories for the PC builder and their search keywords
+ */
+
+export const CATEGORY_KEYS = [
+  'cpu',
+  'motherboard',
+  'ram',
+  'gpu',
+  'storage',
+  'psu',
+  'case',
+  'cooler',
+  'monitor',
+  'mouse',
+  'headphones',
+  'keyboard',
+  'peripherals',
+] as const;
+
+export type CategoryKey = typeof CATEGORY_KEYS[number];
+
+export interface Category {
+  key: CategoryKey;
+  name: string;
+  shortName: string;
+  icon: string; // Keep for backward compatibility, but will use iconKey from icons.tsx
+  description: string;
+  searchKeywords: string[];
+  required: boolean;
+  order: number;
+  parentCategory?: CategoryKey; // For sub-categories
+  subCategories?: CategoryKey[]; // For categories with sub-tabs
+}
+
+export const CATEGORIES: Record<CategoryKey, Category> = {
+  cpu: {
+    key: 'cpu',
+    name: 'Procesador',
+    shortName: 'CPU',
+    icon: '🔲',
+    description: 'El cerebro de tu PC',
+    searchKeywords: ['procesador', 'cpu', 'ryzen', 'intel core'],
+    required: true,
+    order: 1,
+  },
+  motherboard: {
+    key: 'motherboard',
+    name: 'Placa Madre',
+    shortName: 'Motherboard',
+    icon: '📟',
+    description: 'Conecta todos los componentes',
+    searchKeywords: ['motherboard', 'placa madre', 'mother'],
+    required: true,
+    order: 2,
+  },
+  ram: {
+    key: 'ram',
+    name: 'Memoria RAM',
+    shortName: 'RAM',
+    icon: '📊',
+    description: 'Memoria de trabajo',
+    searchKeywords: ['memoria ram', 'ddr4', 'ddr5'],
+    required: true,
+    order: 3,
+  },
+  gpu: {
+    key: 'gpu',
+    name: 'Placa de Video',
+    shortName: 'GPU',
+    icon: '🎮',
+    description: 'Procesamiento gráfico',
+    searchKeywords: ['placa de video', 'gpu', 'geforce', 'radeon', 'rtx', 'video'],
+    required: false,
+    order: 4,
+  },
+  storage: {
+    key: 'storage',
+    name: 'Almacenamiento',
+    shortName: 'Storage',
+    icon: '💾',
+    description: 'SSD / HDD para tus datos',
+    searchKeywords: ['ssd', 'disco', 'nvme', 'hdd', 'almacenamiento'],
+    required: true,
+    order: 5,
+  },
+  psu: {
+    key: 'psu',
+    name: 'Fuente de Poder',
+    shortName: 'PSU',
+    icon: '⚡',
+    description: 'Alimentación eléctrica',
+    searchKeywords: ['fuente', 'psu', 'power supply', 'fuente de poder'],
+    required: true,
+    order: 6,
+  },
+  case: {
+    key: 'case',
+    name: 'Gabinete',
+    shortName: 'Case',
+    icon: '🖥️',
+    description: 'El hogar de tus componentes',
+    searchKeywords: ['gabinete', 'case', 'chasis'],
+    required: true,
+    order: 7,
+  },
+  cooler: {
+    key: 'cooler',
+    name: 'Cooler CPU',
+    shortName: 'Cooler',
+    icon: '❄️',
+    description: 'Enfriamiento del procesador',
+    searchKeywords: ['cooler', 'refrigeracion', 'aio', 'disipador'],
+    required: false,
+    order: 8,
+  },
+  monitor: {
+    key: 'monitor',
+    name: 'Monitor',
+    shortName: 'Monitor',
+    icon: '🖥️',
+    description: 'Pantalla para tu PC',
+    searchKeywords: ['monitor', 'pantalla', 'display'],
+    required: false,
+    order: 9,
+  },
+  mouse: {
+    key: 'mouse',
+    name: 'Mouse',
+    shortName: 'Mouse',
+    icon: '🖱️',
+    description: 'Periférico de entrada',
+    searchKeywords: ['mouse', 'raton'],
+    required: false,
+    order: 10,
+    parentCategory: 'peripherals',
+  },
+  headphones: {
+    key: 'headphones',
+    name: 'Auriculares',
+    shortName: 'Auriculares',
+    icon: '🎧',
+    description: 'Audio para tu PC',
+    searchKeywords: ['auriculares', 'headset', 'headphones'],
+    required: false,
+    order: 11,
+    parentCategory: 'peripherals',
+  },
+  keyboard: {
+    key: 'keyboard',
+    name: 'Teclado',
+    shortName: 'Teclado',
+    icon: '⌨️',
+    description: 'Periférico de entrada',
+    searchKeywords: ['teclado', 'keyboard'],
+    required: false,
+    order: 12,
+    parentCategory: 'peripherals',
+  },
+  peripherals: {
+    key: 'peripherals',
+    name: 'Periféricos',
+    shortName: 'Periféricos',
+    icon: '🎮',
+    description: 'Todos los periféricos de PC',
+    searchKeywords: ['perifericos', 'accesorios'],
+    required: false,
+    order: 13,
+    subCategories: ['mouse', 'headphones', 'keyboard', 'peripherals'], // Order: Mouse, Auriculares, Teclado, Todos
+  },
+};
+
+/**
+ * Get categories as an ordered array
+ */
+export function getCategoriesArray(): Category[] {
+  return Object.values(CATEGORIES).sort((a, b) => a.order - b.order);
+}
+
+/**
+ * Get main categories (without sub-categories, but including parent categories)
+ */
+export function getMainCategories(): Category[] {
+  return getCategoriesArray().filter((cat) => !cat.parentCategory);
+}
+
+/**
+ * Get sub-categories for a given parent category
+ */
+export function getSubCategories(parentKey: CategoryKey): Category[] {
+  const parent = CATEGORIES[parentKey];
+  if (!parent?.subCategories) return [];
+  
+  return parent.subCategories
+    .map((key) => CATEGORIES[key])
+    .filter((cat): cat is Category => cat !== undefined)
+    .sort((a, b) => a.order - b.order);
+}
+
+/**
+ * Check if a category has sub-categories
+ */
+export function hasSubCategories(key: CategoryKey): boolean {
+  return (CATEGORIES[key]?.subCategories?.length ?? 0) > 0;
+}
+
+/**
+ * Get required categories
+ */
+export function getRequiredCategories(): Category[] {
+  return getCategoriesArray().filter((cat) => cat.required);
+}
+
+/**
+ * Get category by key
+ */
+export function getCategory(key: CategoryKey): Category {
+  return CATEGORIES[key];
+}
+
+/**
+ * Check if a category key is valid
+ */
+export function isValidCategoryKey(key: string): key is CategoryKey {
+  return CATEGORY_KEYS.includes(key as CategoryKey);
+}
+
+/**
+ * Check if GPU is required based on selected CPU
+ * @param cpuHasIntegratedGraphics - Whether the selected CPU has integrated graphics
+ * @returns true if GPU is required, false otherwise
+ */
+export function isGpuRequired(cpuHasIntegratedGraphics?: boolean): boolean {
+  // If no CPU is selected or CPU info is unknown, GPU is optional
+  if (cpuHasIntegratedGraphics === undefined) {
+    return false;
+  }
+  
+  // If CPU has integrated graphics, GPU is optional
+  // If CPU does NOT have integrated graphics, GPU is required
+  return !cpuHasIntegratedGraphics;
+}
+
