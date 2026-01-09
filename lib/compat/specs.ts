@@ -304,6 +304,65 @@ function extractCpuSpecs(product: Product): ProductSpec {
 }
 
 /**
+ * Extract memory types from attribute groups
+ */
+function extractMemoryTypesFromAttributes(product: Product): string[] {
+  if (!product.attributeGroups) {
+    return [];
+  }
+
+  const memoryTypes: string[] = [];
+  
+  // Search through all attribute groups
+  for (const group of product.attributeGroups) {
+    for (const attr of group.attributes) {
+      // Search in both attribute name and value
+      const attrText = `${attr.name} ${attr.value}`;
+      
+      // Check for memory type patterns
+      for (const [memType, regexList] of Object.entries(MEMORY_TYPE_PATTERNS)) {
+        for (const regex of regexList) {
+          if (regex.test(attrText) && !memoryTypes.includes(memType)) {
+            memoryTypes.push(memType);
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  return memoryTypes;
+}
+
+/**
+ * Extract form factor from attribute groups for motherboard
+ */
+function extractFormFactorFromAttributes(product: Product): string | undefined {
+  if (!product.attributeGroups) {
+    return undefined;
+  }
+  
+  for (const group of product.attributeGroups) {
+    for (const attr of group.attributes) {
+      const attrText = `${attr.name} ${attr.value}`;
+      
+      // Look for form factor in attributes
+      if (/form.?factor|formato|tama[ñn]o/i.test(attr.name)) {
+        for (const [ff, regexList] of Object.entries(FORM_FACTOR_PATTERNS)) {
+          for (const regex of regexList) {
+            if (regex.test(attrText)) {
+              return ff;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return undefined;
+}
+
+/**
  * Extract motherboard specs from product
  */
 function extractMotherboardSpecs(product: Product): ProductSpec {
@@ -317,8 +376,24 @@ function extractMotherboardSpecs(product: Product): ProductSpec {
     socket = inferSocketFromChipset(chipset);
   }
 
-  const formFactor = extractPattern(text, FORM_FACTOR_PATTERNS) ?? 'ATX';
-  const supportedMemoryTypes = extractPatterns(text, MEMORY_TYPE_PATTERNS);
+  // Try to extract form factor from title/description first
+  let formFactor = extractPattern(text, FORM_FACTOR_PATTERNS);
+  
+  // If not found, try attribute groups
+  if (!formFactor) {
+    formFactor = extractFormFactorFromAttributes(product);
+  }
+  
+  // Default to ATX if still not found
+  formFactor = formFactor ?? 'ATX';
+  
+  // Try to extract memory types from title/description first
+  let supportedMemoryTypes = extractPatterns(text, MEMORY_TYPE_PATTERNS);
+  
+  // If not found in title/description, search in attribute groups
+  if (supportedMemoryTypes.length === 0) {
+    supportedMemoryTypes = extractMemoryTypesFromAttributes(product);
+  }
 
   const maxMemory = extractNumber(text, /(?:hasta|max|up to)\s*(\d+)\s*GB/i);
   const memorySlots = extractNumber(text, /(\d+)\s*(?:slots?|ranuras?)\s*(?:de\s*)?(?:RAM|memoria|DIMM)/i)
@@ -375,13 +450,72 @@ function extractRamSpecs(product: Product): ProductSpec {
 }
 
 /**
+ * Extract GPU length from product (in mm)
+ */
+function extractGpuLength(product: Product): number | undefined {
+  const text = `${product.title} ${product.description}`;
+  
+  // Try multiple patterns for GPU length in description/title
+  // Pattern 1: "longitud: 300mm", "length: 300 mm", "largo: 300mm"
+  let length = extractNumber(text, /(?:longitud|length|largo|lenght)[:\s]*(\d{2,3})\s*mm/i);
+  if (length) return length;
+  
+  // Pattern 2: "300mm de longitud/largo"
+  length = extractNumber(text, /(\d{2,3})\s*mm\s*(?:de\s*)?(?:longitud|length|largo)/i);
+  if (length) return length;
+  
+  // Pattern 3: "dimensiones: 300 x 120 x 50 mm" - take the first (length)
+  length = extractNumber(text, /(?:dimensiones|dimensions)[:\s]*(\d{2,3})\s*x\s*\d+\s*x\s*\d+\s*mm/i);
+  if (length) return length;
+  
+  // Pattern 4: Generic "300mm" or "300 mm" in text (less reliable but useful)
+  const mmMatches = text.match(/(\d{2,3})\s*mm/gi);
+  if (mmMatches && mmMatches.length > 0) {
+    // Look for the largest value between 150-400mm (typical GPU range)
+    const lengths = mmMatches
+      .map(m => parseInt(m.match(/(\d{2,3})/)?.[1] || '0'))
+      .filter(l => l >= 150 && l <= 450);
+    if (lengths.length > 0) {
+      return Math.max(...lengths);
+    }
+  }
+  
+  // Try to extract from attribute groups
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        const attrText = `${attr.name} ${attr.value}`;
+        
+        // Look for length/longitud in attributes
+        if (/longitud|length|largo|dimensi[oó]n/i.test(attr.name)) {
+          const attrLength = extractNumber(attrText, /(\d{2,3})\s*mm/i);
+          if (attrLength && attrLength >= 150 && attrLength <= 450) {
+            return attrLength;
+          }
+          // Try to extract from "300 x 120 x 50 mm" format
+          const dimMatch = attrText.match(/(\d{2,3})\s*x\s*\d+\s*x\s*\d+/i);
+          if (dimMatch) {
+            const dimLength = parseInt(dimMatch[1]);
+            if (dimLength >= 150 && dimLength <= 450) {
+              return dimLength;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return undefined;
+}
+
+/**
  * Extract GPU specs from product
  */
 function extractGpuSpecs(product: Product): ProductSpec {
   const text = `${product.title} ${product.description}`;
 
-  // GPU length
-  const gpuLength = extractNumber(text, /(\d{2,3})\s*mm/i);
+  // GPU length with improved extraction
+  const gpuLength = extractGpuLength(product);
 
   // Recommended PSU
   const gpuRecommendedPsu = extractNumber(text, /(?:recomendada?|recommended)\s*(\d+)\s*W/i)
@@ -394,14 +528,89 @@ function extractGpuSpecs(product: Product): ProductSpec {
 }
 
 /**
+ * Extract maximum GPU length supported by case (in mm)
+ */
+function extractMaxGpuLength(product: Product): number | undefined {
+  const text = `${product.title} ${product.description}`;
+  
+  // Pattern 1: "GPU hasta 350mm", "GPU max 350mm", "VGA up to 350mm"
+  let length = extractNumber(text, /(?:GPU|VGA|video|gr[aá]fica|tarjeta de video)[^\d]*(?:hasta|max|up to|m[aá]ximo|soporta)[^\d]*(\d{2,3})\s*mm/i);
+  if (length) return length;
+  
+  // Pattern 2: "soporta GPU de 350mm", "GPU length 350mm"
+  length = extractNumber(text, /(?:soporta|admite|support)[^\d]*(?:GPU|VGA|video)[^\d]*(\d{2,3})\s*mm/i);
+  if (length) return length;
+  
+  // Pattern 3: "350mm GPU", "350mm de GPU"
+  length = extractNumber(text, /(\d{2,3})\s*mm\s*(?:de\s*)?(?:GPU|VGA|video|gr[aá]fica)/i);
+  if (length) return length;
+  
+  // Try to extract from attribute groups
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        const attrText = `${attr.name} ${attr.value}`;
+        
+        // Look for GPU/VGA related attributes
+        if (/GPU|VGA|video|gr[aá]fica|tarjeta/i.test(attrText)) {
+          const attrLength = extractNumber(attrText, /(\d{2,3})\s*mm/i);
+          if (attrLength && attrLength >= 150 && attrLength <= 500) {
+            return attrLength;
+          }
+        }
+      }
+    }
+  }
+  
+  return undefined;
+}
+
+/**
+ * Extract form factors from attribute groups
+ */
+function extractFormFactorsFromAttributes(product: Product): string[] {
+  if (!product.attributeGroups) {
+    return [];
+  }
+
+  const formFactors: string[] = [];
+  
+  for (const group of product.attributeGroups) {
+    for (const attr of group.attributes) {
+      const attrText = `${attr.name} ${attr.value}`;
+      
+      // Check for form factor patterns
+      for (const [ff, regexList] of Object.entries(FORM_FACTOR_PATTERNS)) {
+        for (const regex of regexList) {
+          if (regex.test(attrText) && !formFactors.includes(ff)) {
+            formFactors.push(ff);
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  return formFactors;
+}
+
+/**
  * Extract case specs from product
  */
 function extractCaseSpecs(product: Product): ProductSpec {
   const text = `${product.title} ${product.description}`;
 
-  const supportedFormFactors = extractPatterns(text, FORM_FACTOR_PATTERNS);
-  const maxGpuLength = extractNumber(text, /(?:GPU|VGA|video|gráfica)[^\d]*(?:hasta|max|up to)?\s*(\d{2,3})\s*mm/i)
-    ?? extractNumber(text, /(\d{2,3})\s*mm\s*(?:GPU|VGA|video)/i);
+  // Try to extract form factors from title/description first
+  let supportedFormFactors = extractPatterns(text, FORM_FACTOR_PATTERNS);
+  
+  // If not found, try attribute groups
+  if (supportedFormFactors.length === 0) {
+    supportedFormFactors = extractFormFactorsFromAttributes(product);
+  }
+  
+  // Extract max GPU length with improved patterns
+  const maxGpuLength = extractMaxGpuLength(product);
+  
   const maxCpuCoolerHeight = extractNumber(text, /(?:cooler|disipador|CPU)[^\d]*(?:hasta|max)?\s*(\d{2,3})\s*mm/i);
 
   return {

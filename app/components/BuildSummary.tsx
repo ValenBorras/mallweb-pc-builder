@@ -79,7 +79,7 @@ export function BuildSummary() {
 
       {/* Parts list */}
       {isClient && (
-        <div className="p-4 space-y-3 max-h-[350px] overflow-y-auto">
+        <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
           {selectedParts.length === 0 ? (
           <div className="text-center py-10">
             <div className="text-5xl mb-4">🔧</div>
@@ -104,82 +104,98 @@ export function BuildSummary() {
                   {part.map((item: ProductWithQuantity, index: number) => (
                     <div
                       key={`${category.key}-${item.product.product.id}`}
-                      className="flex items-center gap-2 p-3 rounded-xl bg-gray-50 border border-gray-200"
+                      className="p-3 rounded-xl bg-gray-50 border border-gray-200"
                     >
-                      {/* Icon */}
-                      {index === 0 && (
-                        <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-base shrink-0">
-                          <IconComponent className="w-5 h-5" />
-                        </div>
-                      )}
-                      {index > 0 && (
-                        <div className="w-9 h-9 flex items-center justify-center text-base shrink-0">
-                          {/* Empty space for alignment */}
-                        </div>
-                      )}
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        {index === 0 && (
-                          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
-                            {category.shortName}
+                      {/* Top row: Image + Title */}
+                      <div className="flex items-start gap-3 mb-2">
+                        {/* Product Image */}
+                        <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                          {item.product.product.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.product.product.imageUrl}
+                              alt={item.product.product.title}
+                              className="w-full h-full object-contain p-1"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                if (target.nextElementSibling) {
+                                  (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                                }
+                              }}
+                            />
+                          ) : null}
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 hidden">
+                            <IconComponent className="w-6 h-6" />
                           </div>
-                        )}
-                        <div className="text-xs text-gray-900 truncate leading-tight">
-                          {item.product.product.title}
+                        </div>
+
+                        {/* Info - Full width */}
+                        <div className="flex-1 min-w-0">
+                          {index === 0 && (
+                            <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+                              {category.shortName}
+                            </div>
+                          )}
+                          <div className="text-xs font-medium text-gray-900 leading-tight">
+                            {item.product.product.title}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Quantity controls */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => decrementQuantity(category.key, item.product.product.id)}
-                          className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors"
-                          title="Decrementar"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
-                          </svg>
-                        </button>
-                        <span className="text-xs font-medium text-gray-900 w-6 text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => incrementQuantity(category.key, item.product.product.id)}
-                          disabled={
-                            item.product.product.stock <= item.quantity ||
-                            (category.key === 'ram' && totalRamQuantity >= maxRamSlots)
-                          }
-                          className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={
-                            category.key === 'ram' && totalRamQuantity >= maxRamSlots
-                              ? `Máximo ${maxRamSlots} módulos`
-                              : "Incrementar"
-                          }
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
-                          </svg>
-                        </button>
-                      </div>
+                      {/* Bottom row: Quantity controls + Price + Remove button */}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+                        {/* Quantity controls */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => decrementQuantity(category.key, item.product.product.id)}
+                            className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors"
+                            title="Decrementar"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
+                            </svg>
+                          </button>
+                          <span className="text-xs font-medium text-gray-900 w-6 text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => incrementQuantity(category.key, item.product.product.id)}
+                            disabled={
+                              item.product.product.stock <= item.quantity ||
+                              (category.key === 'ram' && totalRamQuantity >= maxRamSlots)
+                            }
+                            className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={
+                              category.key === 'ram' && totalRamQuantity >= maxRamSlots
+                                ? `Máximo ${maxRamSlots} módulos`
+                                : "Incrementar"
+                            }
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                            </svg>
+                          </button>
+                        </div>
 
-                      {/* Price */}
-                      <div className="text-right shrink-0">
-                        <div className="text-sm font-semibold text-gray-900 whitespace-nowrap">
-                          ${(item.product.product.price * item.quantity).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                        {/* Price and Remove button */}
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <div className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                              ${(item.product.product.price * item.quantity).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => removePart(category.key, item.product.product.id)}
+                            className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                            title="Quitar"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
-
-                      {/* Remove button */}
-                      <button
-                        onClick={() => removePart(category.key, item.product.product.id)}
-                        className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
-                        title="Quitar"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
                     </div>
                   ))}
                 </div>
@@ -190,40 +206,60 @@ export function BuildSummary() {
               return (
                 <div
                   key={category.key}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-200"
+                  className="p-3 rounded-xl bg-gray-50 border border-gray-200"
                 >
-                  {/* Icon */}
-                  <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-base shrink-0">
-                    <IconComponent className="w-5 h-5" />
+                  {/* Top row: Image + Title */}
+                  <div className="flex items-start gap-3 mb-2">
+                    {/* Product Image */}
+                    <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                      {part.product.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={part.product.imageUrl}
+                          alt={part.product.title}
+                          className="w-full h-full object-contain p-1"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            if (target.nextElementSibling) {
+                              (target.nextElementSibling as HTMLElement).style.display = 'flex';
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 hidden">
+                        <IconComponent className="w-6 h-6" />
+                      </div>
+                    </div>
+
+                    {/* Info - Full width */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+                        {category.shortName}
+                      </div>
+                      <div className="text-xs font-medium text-gray-900 leading-tight">
+                        {part.product.title}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">
-                      {category.shortName}
+                  {/* Bottom row: Price + Remove button */}
+                  <div className="flex items-center justify-end gap-3 mt-2 pt-2 border-t border-gray-200">
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-gray-900 whitespace-nowrap">
+                        ${part.product.price.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-900 truncate leading-tight">
-                      {part.product.title}
-                    </div>
+                    <button
+                      onClick={() => removePart(category.key)}
+                      className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+                      title="Quitar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-
-                  {/* Price */}
-                  <div className="text-right shrink-0">
-                    <div className="text-sm font-semibold text-gray-900 whitespace-nowrap">
-                      ${part.product.price.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                    </div>
-                  </div>
-
-                  {/* Remove button */}
-                  <button
-                    onClick={() => removePart(category.key)}
-                    className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
-                    title="Quitar"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
                 </div>
               );
             }

@@ -95,8 +95,8 @@ export function ProductList({
         </p>
       </div>
 
-      {/* Products grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Products grid - Desktop: grid, Mobile: stacked */}
+      <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {products.map(({ product, compatibility }) => (
           <ProductCard
             key={product.id}
@@ -109,6 +109,25 @@ export function ProductList({
             onIncrement={() => onIncrementQuantity(product.id)}
             onDecrement={() => onDecrementQuantity(product.id)}
             categoryKey={categoryKey}
+          />
+        ))}
+      </div>
+
+      {/* Products list - Mobile only */}
+      <div className="lg:hidden flex flex-col gap-3">
+        {products.map(({ product, compatibility }) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            compatibility={compatibility}
+            isSelected={selectedProductIds.includes(product.id)}
+            quantity={productQuantities.get(product.id) ?? 0}
+            onSelect={onSelectProduct}
+            onRemove={() => onRemoveProduct(product.id)}
+            onIncrement={() => onIncrementQuantity(product.id)}
+            onDecrement={() => onDecrementQuantity(product.id)}
+            categoryKey={categoryKey}
+            isMobile={true}
           />
         ))}
       </div>

@@ -107,6 +107,7 @@ export interface CompatibilityResult {
   results: RuleResult[];
   warnings: string[];
   failures: string[];
+  hasUnknownChecks: boolean; // True if some compatibility checks couldn't be performed
 }
 
 /**

@@ -241,11 +241,12 @@ const motherboardCaseFormFactorRule: CompatibilityRule = {
     const moboFF = candidate.spec.formFactor;
     const caseFF = pcCase.spec.supportedFormFactors;
 
+    // If we can't determine form factors, mark as unknown
     if (!moboFF || !caseFF || caseFF.length === 0) {
       return createResult(
         'mobo-case-formfactor',
-        'warn',
-        'No se pudo determinar la compatibilidad de form factor. Verificá manualmente.',
+        'unknown',
+        'No se pudo verificar form factor',
         ['motherboard', 'case']
       );
     }
@@ -305,11 +306,12 @@ const caseMotherboardFormFactorRule: CompatibilityRule = {
     const caseFF = candidate.spec.supportedFormFactors;
     const moboFF = mobo.spec.formFactor;
 
+    // If we can't determine form factors, mark as unknown
     if (!caseFF || caseFF.length === 0 || !moboFF) {
       return createResult(
         'case-mobo-formfactor',
-        'warn',
-        'No se pudo determinar la compatibilidad de form factor. Verificá manualmente.',
+        'unknown',
+        'No se pudo verificar form factor',
         ['case', 'motherboard']
       );
     }
@@ -367,11 +369,12 @@ const gpuCaseLengthRule: CompatibilityRule = {
     const gpuLength = candidate.spec.gpuLength;
     const maxGpuLength = pcCase.spec.maxGpuLength;
 
+    // If we can't determine dimensions, mark as unknown
     if (!gpuLength || !maxGpuLength) {
       return createResult(
         'gpu-case-length',
-        'warn',
-        'No se pudo verificar si la GPU entra en el gabinete. Verificá manualmente.',
+        'unknown',
+        'No se pudieron verificar dimensiones',
         ['gpu', 'case']
       );
     }
@@ -417,11 +420,12 @@ const caseGpuLengthRule: CompatibilityRule = {
     const maxGpuLength = candidate.spec.maxGpuLength;
     const gpuLength = gpu.spec.gpuLength;
 
+    // If we can't determine dimensions, mark as unknown
     if (!maxGpuLength || !gpuLength) {
       return createResult(
         'case-gpu-length',
-        'warn',
-        'No se pudo verificar si la GPU entra en el gabinete. Verificá manualmente.',
+        'unknown',
+        'No se pudieron verificar dimensiones',
         ['case', 'gpu']
       );
     }
@@ -607,11 +611,12 @@ const coolerCaseClearanceRule: CompatibilityRule = {
       );
     }
 
+    // If we can't determine dimensions, mark as unknown
     if (!coolerHeight || !maxCoolerHeight) {
       return createResult(
         'cooler-case-clearance',
-        'warn',
-        'No se pudo verificar si el cooler entra en el gabinete. Verificá manualmente.',
+        'unknown',
+        'No se pudieron verificar dimensiones',
         ['cooler', 'case']
       );
     }

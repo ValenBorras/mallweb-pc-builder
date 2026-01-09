@@ -122,12 +122,6 @@ export function ProductModal({
                   <span className="text-sm text-gray-500">{product.currency}</span>
                 </div>
 
-                <div className="flex items-center gap-2 mb-4">
-                  <span className={`w-2.5 h-2.5 rounded-full ${product.stock > 5 ? 'bg-green-500' : product.stock > 0 ? 'bg-yellow-500' : 'bg-red-500'}`} />
-                  <span className="text-sm text-gray-700 font-medium">
-                    {product.stock > 0 ? `${product.stock} en stock` : 'Sin stock'}
-                  </span>
-                </div>
 
                 {/* Action buttons */}
                 <div className="flex gap-3">

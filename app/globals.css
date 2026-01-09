@@ -43,6 +43,24 @@ body {
   background: #b91c1c;
 }
 
+/* Thin gray scrollbar for category selector */
+.scrollbar-thin-gray::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin-gray::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin-gray::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+.scrollbar-thin-gray::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
 /* Selection */
 ::selection {
   background: rgba(220, 38, 38, 0.3);

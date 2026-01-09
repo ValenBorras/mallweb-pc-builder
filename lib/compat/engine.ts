@@ -42,6 +42,7 @@ export function evaluateCompatibility(
   const results: RuleResult[] = [];
   const warnings: string[] = [];
   const failures: string[] = [];
+  let hasUnknownChecks = false;
 
   for (const rule of rules) {
     const result = rule.evaluate(candidateWithSpec, build);
@@ -51,6 +52,8 @@ export function evaluateCompatibility(
       warnings.push(result.reason);
     } else if (result.status === 'fail') {
       failures.push(result.reason);
+    } else if (result.status === 'unknown') {
+      hasUnknownChecks = true;
     }
   }
 
@@ -60,6 +63,7 @@ export function evaluateCompatibility(
     results,
     warnings,
     failures,
+    hasUnknownChecks,
   };
 }
 
@@ -162,6 +166,7 @@ export function getCompatibilityBadge(
   color: 'green' | 'yellow' | 'red' | 'gray';
   icon: string;
 } {
+  // Incompatible - found real conflicts
   if (!compatibility.allowed) {
     return {
       label: 'Incompatible',
@@ -170,6 +175,7 @@ export function getCompatibilityBadge(
     };
   }
 
+  // Warnings - needs manual verification
   if (compatibility.warnings.length > 0) {
     return {
       label: 'Verificar',
@@ -178,6 +184,16 @@ export function getCompatibilityBadge(
     };
   }
 
+  // Unknown checks - couldn't verify some aspects
+  if (compatibility.hasUnknownChecks) {
+    return {
+      label: 'No se pudo verificar',
+      color: 'yellow',
+      icon: '⚠',
+    };
+  }
+
+  // Fully compatible - all checks passed
   return {
     label: 'Compatible',
     color: 'green',

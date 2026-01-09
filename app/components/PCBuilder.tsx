@@ -5,10 +5,9 @@ import Image from 'next/image';
 import { CategorySelector } from './CategorySelector';
 import { SearchBar } from './SearchBar';
 import { ProductList } from './ProductList';
-import { BuildSummary } from './BuildSummary';
 import { SubCategoryTabs } from './SubCategoryTabs';
-import { useBuildStore } from '@/store/buildStore';
-import { CATEGORIES, hasSubCategories, type CategoryKey } from '@/lib/catalog/categories';
+import { useBuildStore, useMaxRamSlots } from '@/store/buildStore';
+import { CATEGORIES, hasSubCategories, getMainCategories, isGpuRequired, type CategoryKey } from '@/lib/catalog/categories';
 import { getCategoryIcon } from '@/lib/catalog/icons';
 import { filterProductsByCategory } from '@/lib/catalog/filters';
 import type { Product } from '@/lib/mallweb/normalize';
@@ -41,6 +40,7 @@ export function PCBuilder() {
 
   const selectedPart = parts[activeCategory];
   const category = CATEGORIES[activeCategory];
+  const maxRamSlots = useMaxRamSlots();
   
   // Determine the parent category and if we should show sub-tabs
   const parentCategory = category.parentCategory || activeCategory;
@@ -139,12 +139,92 @@ export function PCBuilder() {
     performSearch('', page);
   };
 
+  // Get next required category that doesn't have a part selected
+  const getNextRequiredCategory = (): CategoryKey | null => {
+    const mainCategories = getMainCategories();
+    const currentIndex = mainCategories.findIndex(cat => cat.key === activeCategory);
+    
+    // Check categories after current one
+    for (let i = currentIndex + 1; i < mainCategories.length; i++) {
+      const cat = mainCategories[i];
+      const part = parts[cat.key];
+      const hasPart = Array.isArray(part) ? part.length > 0 : part !== null;
+      
+      // Check if category is required
+      let isRequired = cat.required;
+      if (cat.key === 'gpu') {
+        const cpuPart = parts.cpu;
+        const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
+        isRequired = isGpuRequired(cpuHasGraphics);
+      }
+      
+      if (isRequired && !hasPart) {
+        return cat.key;
+      }
+    }
+    
+    // If no category found after current, check from beginning
+    for (let i = 0; i < currentIndex; i++) {
+      const cat = mainCategories[i];
+      const part = parts[cat.key];
+      const hasPart = Array.isArray(part) ? part.length > 0 : part !== null;
+      
+      let isRequired = cat.required;
+      if (cat.key === 'gpu') {
+        const cpuPart = parts.cpu;
+        const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
+        isRequired = isGpuRequired(cpuHasGraphics);
+      }
+      
+      if (isRequired && !hasPart) {
+        return cat.key;
+      }
+    }
+    
+    return null;
+  };
+
   const handleSelectProduct = (product: Product) => {
-    // For RAM and Storage, add to array; for others, replace
-    if (activeCategory === 'ram' || activeCategory === 'storage') {
+    // For RAM, add to array and check if slots are full
+    if (activeCategory === 'ram') {
       addPart(activeCategory, product);
-    } else {
+      
+      // Check if we've reached the maximum RAM slots after adding
+      // We need to use a timeout to allow the state to update
+      setTimeout(() => {
+        const updatedRamQuantity = useBuildStore.getState().parts.ram;
+        const totalRamItems = Array.isArray(updatedRamQuantity) 
+          ? updatedRamQuantity.reduce((sum, item) => sum + item.quantity, 0)
+          : 0;
+        
+        if (totalRamItems >= maxRamSlots) {
+          // Auto-advance to next required category
+          const nextCategory = getNextRequiredCategory();
+          if (nextCategory) {
+            setActiveCategory(nextCategory);
+          }
+        }
+      }, 100);
+    } 
+    // For Storage, add to array and auto-advance immediately
+    else if (activeCategory === 'storage') {
+      addPart(activeCategory, product);
+      
+      // Auto-advance to next required category
+      const nextCategory = getNextRequiredCategory();
+      if (nextCategory) {
+        setActiveCategory(nextCategory);
+      }
+    } 
+    // For all other categories, replace and auto-advance
+    else {
       setPart(activeCategory, product);
+      
+      // Auto-advance to next required category
+      const nextCategory = getNextRequiredCategory();
+      if (nextCategory) {
+        setActiveCategory(nextCategory);
+      }
     }
   };
 
@@ -164,27 +244,27 @@ export function PCBuilder() {
     <div className="min-h-screen bg-slate-100">
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-gray-900/95 border-b border-gray-800">
-        <div className="max-w-[1600px] mx-auto px-6 py-4">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Image
                 src="/241_12-10-2022-02-10-45-mallweb.png"
                 alt="Mall Web Logo"
                 width={120}
                 height={48}
-                className="h-12 w-auto object-contain"
+                className="h-8 sm:h-12 w-auto object-contain"
                 priority
               />
               <div>
-                <h1 className="text-xl font-bold text-white">
+                <h1 className="text-base sm:text-xl font-bold text-white">
                   PC Builder
                 </h1>
-                <p className="text-xs text-gray-300">Powered by Mall Web</p>
+                <p className="text-[10px] sm:text-xs text-gray-300">Powered by Mall Web</p>
               </div>
             </div>
             
             {/* Show/hide incompatible toggle */}
-            <label className="flex items-center gap-3 cursor-pointer select-none">
+            <label className="hidden sm:flex items-center gap-3 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={showIncompatible}
@@ -201,10 +281,10 @@ export function PCBuilder() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-[1600px] mx-auto px-6 py-8">
-        <div className="flex gap-8">
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-16 xl:px-24 py-4 lg:py-8">
+        <div className="flex gap-6 lg:gap-12">
           {/* Left sidebar - Categories */}
-          <aside className="w-72 flex-shrink-0 hidden lg:block">
+          <aside className="w-72 shrink-0 hidden lg:block">
             <div className="sticky top-28">
               <CategorySelector
                 activeCategory={activeCategory}
@@ -214,24 +294,9 @@ export function PCBuilder() {
           </aside>
 
           {/* Main content area */}
-          <div className="flex-1 min-w-0">
-            {/* Mobile category selector */}
-            <div className="lg:hidden mb-6">
-              <select
-                value={activeCategory}
-                onChange={(e) => setActiveCategory(e.target.value as CategoryKey)}
-                className="w-full p-4 rounded-xl bg-white border border-gray-300 text-gray-900"
-              >
-                {Object.values(CATEGORIES).map((cat) => (
-                  <option key={cat.key} value={cat.key}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
+          <div className="flex-1 min-w-0 pb-24 lg:pb-0">
             {/* Category header */}
-            <div className="mb-6">
+            <div className="mb-4 sm:mb-6 hidden lg:block">
               <div className="flex items-center gap-4 mb-2">
                 {(() => {
                   const IconComponent = getCategoryIcon(parentCategory);
@@ -281,34 +346,38 @@ export function PCBuilder() {
               categoryKey={activeCategory}
             />
           </div>
-
-          {/* Right sidebar - Build summary */}
-          <aside className="w-[340px] flex-shrink-0 hidden xl:block">
-            <div className="sticky top-28">
-              <BuildSummary />
-            </div>
-          </aside>
         </div>
       </main>
 
-      {/* Mobile build summary (floating) */}
-      <div className="xl:hidden fixed bottom-6 left-6 right-6 z-50">
-        <MobileBuildSummary />
+      {/* Mobile category selector (floating) */}
+      <div className="lg:hidden fixed bottom-4 left-4 right-4 z-50">
+        <MobileCategorySelector
+          activeCategory={activeCategory}
+          onCategoryChange={setActiveCategory}
+        />
       </div>
     </div>
   );
 }
 
-// Mobile build summary component
-function MobileBuildSummary() {
+// Mobile category selector component
+function MobileCategorySelector({
+  activeCategory,
+  onCategoryChange,
+}: {
+  activeCategory: CategoryKey;
+  onCategoryChange: (category: CategoryKey) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const getTotalPrice = useBuildStore((state) => state.getTotalPrice);
   const getPartCount = useBuildStore((state) => state.getPartCount);
+  const clearBuild = useBuildStore((state) => state.clearBuild);
+  const parts = useBuildStore((state) => state.parts);
+  const cpuPart = useBuildStore((state) => state.parts.cpu);
 
   const totalPrice = getTotalPrice();
   const partCount = getPartCount();
-
-  if (partCount === 0) return null;
+  const mainCategories = getMainCategories();
 
   return (
     <>
@@ -326,14 +395,148 @@ function MobileBuildSummary() {
         ${isOpen ? 'bottom-6' : 'bottom-6'}
       `}>
         {isOpen ? (
-          <div className="rounded-2xl overflow-hidden shadow-2xl">
-            <BuildSummary />
-            <button
-              onClick={() => setIsOpen(false)}
-              className="w-full py-4 bg-gray-200 text-gray-700 text-sm font-medium"
-            >
-              Cerrar
-            </button>
+          <div className="rounded-2xl overflow-hidden shadow-2xl bg-white max-h-[70vh] flex flex-col">
+            {/* Header */}
+            <div className="p-4 bg-gradient-to-br from-red-50 to-red-100/50 border-b-2 border-red-200/50 shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Componentes</h3>
+                  <p className="text-xs text-gray-600 mt-0.5">{partCount} seleccionados</p>
+                </div>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-white/50 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {partCount > 0 && (
+                <button
+                  onClick={() => {
+                    clearBuild();
+                    setIsOpen(false);
+                  }}
+                  className="w-full py-2 px-4 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors"
+                >
+                  Limpiar Build
+                </button>
+              )}
+            </div>
+            
+            {/* Category grid */}
+            <div className="flex-1 overflow-y-auto p-4 scrollbar-thin-gray">
+              <div className="grid grid-cols-2 gap-3">
+                {mainCategories.map((category) => {
+                  const part = parts[category.key];
+                  const isMultiSelect = category.key === 'ram' || category.key === 'storage';
+                  const hasPart = isMultiSelect 
+                    ? (Array.isArray(part) && part.length > 0)
+                    : part !== null;
+                  
+                  const itemCount = isMultiSelect && Array.isArray(part) 
+                    ? part.reduce((sum, item) => sum + item.quantity, 0)
+                    : 0;
+                  
+                  let isDynamicallyRequired = category.required;
+                  if (category.key === 'gpu') {
+                    const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
+                    isDynamicallyRequired = isGpuRequired(cpuHasGraphics);
+                  }
+
+                  let productImage: string | null = null;
+                  let productTitle: string | null = null;
+                  
+                  if (hasPart) {
+                    if (Array.isArray(part) && part.length > 0) {
+                      productImage = part[0].product.product.imageUrl;
+                      productTitle = part[0].product.product.title;
+                    } else if (!Array.isArray(part) && part?.product) {
+                      productImage = part.product.imageUrl;
+                      productTitle = part.product.title;
+                    }
+                  }
+
+                  const IconComponent = getCategoryIcon(category.key);
+                  const isActive = activeCategory === category.key;
+
+                  return (
+                    <button
+                      key={category.key}
+                      onClick={() => {
+                        onCategoryChange(category.key);
+                        setIsOpen(false);
+                      }}
+                      className={`
+                        aspect-square flex flex-col items-center justify-center gap-2 p-3 rounded-lg text-center transition-all duration-200 relative
+                        ${isActive 
+                          ? 'bg-red-50 border-2 border-red-300 shadow-lg shadow-red-500/10' 
+                          : 'bg-white border-2 border-gray-200 hover:border-gray-300'
+                        }
+                      `}
+                    >
+                      {/* Icon/Product Image */}
+                      <div className={`
+                        w-20 h-20 rounded-lg flex items-center justify-center shrink-0 overflow-hidden
+                        ${isActive ? 'bg-red-100' : 'bg-gray-100'}
+                      `}>
+                        {productImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={productImage}
+                            alt={productTitle || category.shortName}
+                            className="w-full h-full object-contain p-2"
+                          />
+                        ) : (
+                          <IconComponent className="w-10 h-10" />
+                        )}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 flex flex-col items-center justify-center min-w-0 w-full">
+                        <span className={`font-medium text-xs ${isActive ? 'text-red-600' : 'text-gray-900'} line-clamp-3 leading-tight text-center`}>
+                          {productTitle || category.shortName}
+                        </span>
+                        {isDynamicallyRequired && !hasPart && (
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-red-100 text-red-600 font-medium whitespace-nowrap mt-1">
+                            Req.
+                          </span>
+                        )}
+                        {hasPart && isMultiSelect && (
+                          <p className="text-[9px] text-gray-600 mt-1 leading-tight">
+                            {itemCount} items
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Status indicator */}
+                      <div className={`
+                        absolute top-1.5 right-1.5 w-2 h-2 rounded-full
+                        ${hasPart ? 'bg-green-500' : 'bg-gray-400'}
+                      `} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Total */}
+            <div className="p-4 bg-gradient-to-br from-red-50 to-red-100/50 border-t-2 border-red-200/50 shrink-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Total del Build
+                  </span>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-2xl font-bold text-red-600">
+                      ${totalPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs text-gray-600 font-medium">USD</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <button
