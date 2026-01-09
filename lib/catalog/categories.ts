@@ -1,6 +1,6 @@
 /**
  * PC Component Categories
- * Defines the categories for the PC builder and their search keywords
+ * Defines the categories for the Arma tu PC and their search keywords
  */
 
 export const CATEGORY_KEYS = [

@@ -1,8 +1,8 @@
-# PC Builder - Mall Web
+# Arma tu PC - Mall Web
 
 Un clon de "Armá tu PC" de CompraGamer, usando el catálogo de productos de Mall Web (Gestión Resellers) con verificación de compatibilidad de componentes.
 
-![PC Builder](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![Arma tu PC](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
 ![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?logo=tailwindcss)
 

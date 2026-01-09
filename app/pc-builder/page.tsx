@@ -1,7 +1,7 @@
 import { PCBuilder } from '../components/PCBuilder';
 
 export const metadata = {
-  title: 'PC Builder - Armá tu PC',
+  title: 'Arma tu PC - Armá tu PC',
   description: 'Armá tu PC componente por componente con verificación de compatibilidad',
 };
 

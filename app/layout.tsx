@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PC Builder - Armá tu PC",
+  title: "Arma tu PC - Armá tu PC",
   description: "Armá tu PC componente por componente con verificación de compatibilidad automática. Powered by Mall Web.",
   keywords: ["PC", "builder", "componentes", "hardware", "compatibilidad", "Argentina"],
 };

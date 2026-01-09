@@ -132,7 +132,7 @@ export function ProductModal({
                         bg-gray-200 text-gray-700 hover:bg-gray-300
                         transition-colors"
                     >
-                      Quitar del build
+                      Quitar de la PC
                     </button>
                   ) : (
                     <button

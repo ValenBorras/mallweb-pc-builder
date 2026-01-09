@@ -257,7 +257,7 @@ export function PCBuilder() {
               />
               <div>
                 <h1 className="text-base sm:text-xl font-bold text-white">
-                  PC Builder
+                  Arma tu PC
                 </h1>
                 <p className="text-[10px] sm:text-xs text-gray-300">Powered by Mall Web</p>
               </div>

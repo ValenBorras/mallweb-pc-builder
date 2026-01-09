@@ -19,7 +19,7 @@ export default function Home() {
           </div>
           <h1 className="text-5xl font-bold mb-4">
             <span className="text-red-600">
-              PC Builder
+              Arma tu PC
             </span>
           </h1>
           <p className="text-xl text-gray-600 mb-8">

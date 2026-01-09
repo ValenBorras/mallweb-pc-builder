@@ -7,7 +7,7 @@ import type { Product } from '../mallweb/normalize';
 import type { CategoryKey } from './categories';
 
 /**
- * Filter rules for each PC Builder category
+ * Filter rules for each Arma tu PC category
  * - includePatterns: Product must have at least one category matching these patterns
  * - excludePatterns: Product is excluded if ANY category matches these patterns
  * - titleExcludePatterns: Product is excluded if title matches these patterns
