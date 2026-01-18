@@ -238,6 +238,27 @@ const FILTER_RULES: Record<CategoryKey, CategoryFilterRules> = {
       /webcam/i,
     ],
   },
+  fans: {
+    // Match: "Coolers" category but filter for case fans only
+    includePatterns: [
+      /coolers?/i,
+      /refrigeracion/i,
+    ],
+    excludePatterns: [
+      /combo/i,
+      /kit/i,
+      /notebook/i,
+      /laptop/i,
+    ],
+    titleExcludePatterns: [
+      /notebook/i,
+      /laptop/i,
+      /base.*cooler/i,
+      /cooler.*base/i,
+      /pad/i,
+      /stand/i,
+    ],
+  },
   peripherals: {
     // Match: All "Perifericos de PC"
     includePatterns: [
@@ -456,6 +477,16 @@ function isCpuCooler(product: Product): boolean {
 }
 
 /**
+ * Check if a product is a case fan (not a CPU cooler)
+ * This is the EXACT OPPOSITE of isCpuCooler
+ */
+function isCaseFan(product: Product): boolean {
+  // Simply return the opposite of isCpuCooler
+  // If it's not a CPU cooler, it's a case fan
+  return !isCpuCooler(product);
+}
+
+/**
  * Filter products for a specific category
  */
 export function filterProductsByCategory(products: Product[], categoryKey: CategoryKey): Product[] {
@@ -464,6 +495,11 @@ export function filterProductsByCategory(products: Product[], categoryKey: Categ
   // Special filtering for coolers: only include CPU coolers
   if (categoryKey === 'cooler') {
     return filtered.filter((product) => isCpuCooler(product));
+  }
+  
+  // Special filtering for fans: only include case fans (NOT CPU coolers)
+  if (categoryKey === 'fans') {
+    return filtered.filter((product) => isCaseFan(product));
   }
   
   return filtered;

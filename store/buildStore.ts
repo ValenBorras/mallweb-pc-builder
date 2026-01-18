@@ -63,6 +63,7 @@ const INITIAL_PARTS: PartsRecord = {
   mouse: null,
   headphones: null,
   keyboard: null,
+  fans: null,
   peripherals: null,
 };
 
@@ -412,4 +413,3 @@ export function createIncludedCoolerProduct(): Product {
     attributeGroups: [],
   };
 }
-

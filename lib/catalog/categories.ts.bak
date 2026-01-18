@@ -159,17 +159,6 @@ export const CATEGORIES: Record<CategoryKey, Category> = {
     order: 12,
     parentCategory: 'peripherals',
   },
-  fans: {
-    key: 'fans',
-    name: 'Ventiladores',
-    shortName: 'Fans',
-    icon: '🌀',
-    description: 'Ventiladores para gabinete',
-    searchKeywords: ['ventilador', 'fan', 'cooler'],
-    required: false,
-    order: 14,
-    parentCategory: 'peripherals',
-  },
   peripherals: {
     key: 'peripherals',
     name: 'Periféricos',
@@ -178,8 +167,8 @@ export const CATEGORIES: Record<CategoryKey, Category> = {
     description: 'Todos los periféricos de PC',
     searchKeywords: ['perifericos', 'accesorios'],
     required: false,
-    order: 14,
-    subCategories: ['mouse', 'headphones', 'keyboard', 'fans', 'peripherals'], // Order: Mouse, Auriculares, Teclado, Todos
+    order: 13,
+    subCategories: ['mouse', 'headphones', 'keyboard', 'peripherals'], // Order: Mouse, Auriculares, Teclado, Todos
   },
 };
 

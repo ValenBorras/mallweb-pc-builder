@@ -68,6 +68,7 @@ export function getSuggestedSearchTerms(category: CategoryKey): string[] {
     mouse: ['Logitech', 'Razer', 'SteelSeries', 'Corsair', 'Gaming', 'Inalámbrico', 'RGB'],
     headphones: ['Logitech', 'HyperX', 'Razer', 'Corsair', 'Redragon', 'Gaming', '7.1'],
     keyboard: ['Logitech', 'Razer', 'Corsair', 'Redragon', 'Mecánico', 'RGB', 'Gaming'],
+    fans: ['Cooler Master', 'Corsair', 'NZXT', 'Thermaltake', '120mm', '140mm', 'RGB', 'ARGB'],
     peripherals: ['Logitech', 'Razer', 'Corsair', 'Redragon', 'Gaming', 'RGB'],
   };
 

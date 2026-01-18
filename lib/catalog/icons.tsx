@@ -1,5 +1,5 @@
 import { BsDeviceSsdFill, BsFillMotherboardFill, BsGpuCard, BsKeyboardFill, BsHeadset, BsFillMouse2Fill } from "react-icons/bs";
-import { FaMemory } from "react-icons/fa";
+import { FaMemory, FaFan } from "react-icons/fa";
 import { HiMiniCpuChip } from "react-icons/hi2";
 import { PiCarBatteryFill, PiComputerTowerFill } from "react-icons/pi";
 import { GrFanOption } from "react-icons/gr";
@@ -20,6 +20,7 @@ export const CategoryIcons: Record<CategoryKey, React.ComponentType<{ className?
   mouse: BsFillMouse2Fill,
   headphones: BsHeadset,
   keyboard: BsKeyboardFill,
+  fans: FaFan,
   peripherals: IoGameController,
 };
 

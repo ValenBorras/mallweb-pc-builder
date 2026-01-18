@@ -82,10 +82,13 @@ function SubCategoryItem({
           {productTitle || (subCategoryKey === 'peripherals' ? 'Todos' : category.shortName)}
         </span>
       </div>
-      <div className={`
-        w-2 h-2 rounded-full shrink-0
-        ${hasSubPart ? 'bg-green-500' : 'bg-gray-300'}
-      `} />
+      {/* Only show green dot for main categories, not sub-categories like fans */}
+      {!category.parentCategory && (
+        <div className={`
+          w-2 h-2 rounded-full shrink-0
+          ${hasSubPart ? 'bg-green-500' : 'bg-gray-300'}
+        `} />
+      )}
     </button>
   );
 }

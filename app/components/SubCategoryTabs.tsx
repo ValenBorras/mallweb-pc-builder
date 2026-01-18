@@ -40,7 +40,8 @@ function SubCategoryTabItem({
     >
       <IconComponent className={`w-5 h-5 ${isActive ? 'text-red-600' : 'text-gray-500'}`} />
       <span className="text-sm font-medium">{displayName}</span>
-      {hasPart && (
+      {/* Only show green dot for main categories, not sub-categories */}
+      {hasPart && !category.parentCategory && (
         <span className={`
           w-2 h-2 rounded-full
           ${isActive ? 'bg-red-500' : 'bg-green-500'}
