@@ -242,3 +242,19 @@ export function isGpuRequired(cpuHasIntegratedGraphics?: boolean): boolean {
   return !cpuHasIntegratedGraphics;
 }
 
+/**
+ * Check if Cooler is required based on selected CPU
+ * @param cpuIncludesCooler - Whether the selected CPU includes a cooler
+ * @returns true if Cooler is required, false otherwise
+ */
+export function isCoolerRequired(cpuIncludesCooler?: boolean): boolean {
+  // If no CPU is selected or CPU info is unknown, cooler is optional
+  if (cpuIncludesCooler === undefined) {
+    return false;
+  }
+  
+  // If CPU includes a cooler, external cooler is optional
+  // If CPU does NOT include a cooler, external cooler is required
+  return !cpuIncludesCooler;
+}
+

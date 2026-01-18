@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { GrFanOption } from 'react-icons/gr';
 import type { Product } from '@/lib/mallweb/normalize';
 import type { CompatibilityResult } from '@/lib/compat/types';
 import type { CategoryKey } from '@/lib/catalog/categories';
 import { getCompatibilityBadge } from '@/lib/compat/engine';
 import { isComboProduct, getComboNote } from '@/lib/catalog/filters';
-import { useTotalQuantity, useMaxRamSlots } from '@/store/buildStore';
+import { useTotalQuantity, useMaxRamSlots, USE_INCLUDED_COOLER_ID } from '@/store/buildStore';
 import { ProductModal } from './ProductModal';
 
 interface ProductCardProps {
@@ -100,7 +101,11 @@ export function ProductCard({
             onClick={() => setIsModalOpen(true)}
             className="relative w-24 h-24 rounded-lg bg-gray-100 overflow-hidden cursor-pointer shrink-0"
           >
-            {!imageError ? (
+            {product.id === USE_INCLUDED_COOLER_ID ? (
+              <div className="w-full h-full flex items-center justify-center text-gray-600">
+                <GrFanOption className="w-12 h-12" />
+              </div>
+            ) : !imageError ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={product.imageUrl}
@@ -246,7 +251,11 @@ export function ProductCard({
         >
           {/* Image */}
           <div className="relative aspect-square mb-4 rounded-lg bg-gray-100 overflow-hidden">
-            {!imageError ? (
+            {product.id === USE_INCLUDED_COOLER_ID ? (
+              <div className="w-full h-full flex items-center justify-center text-gray-600">
+                <GrFanOption className="w-20 h-20" />
+              </div>
+            ) : !imageError ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={product.imageUrl}

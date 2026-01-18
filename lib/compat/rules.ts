@@ -449,6 +449,69 @@ const caseGpuLengthRule: CompatibilityRule = {
 };
 
 /**
+ * PSU ↔ GPU Minimum Power Requirement
+ * Checks if PSU meets the minimum wattage specified by the GPU
+ */
+const psuGpuMinimumPowerRule: CompatibilityRule = {
+  id: 'psu-gpu-minimum',
+  name: 'PSU/GPU Minimum Power',
+  description: 'La fuente debe cumplir con la potencia mínima requerida por la GPU',
+  sourceCategory: 'psu',
+  targetCategories: ['gpu'],
+  evaluate: (candidate, build) => {
+    const gpu = build.get('gpu');
+
+    if (!gpu) {
+      return createResult(
+        'psu-gpu-minimum',
+        'pass',
+        'No hay GPU seleccionada',
+        ['psu', 'gpu']
+      );
+    }
+
+    const psuWattage = candidate.spec.psuWattage;
+    const gpuRecommendedPsu = gpu.spec.gpuRecommendedPsu;
+
+    if (!psuWattage) {
+      return createResult(
+        'psu-gpu-minimum',
+        'warn',
+        'No se pudo determinar el wattage de la fuente. Verificá manualmente.',
+        ['psu', 'gpu']
+      );
+    }
+
+    // If GPU doesn't specify a minimum PSU, perform basic estimate
+    if (!gpuRecommendedPsu) {
+      return createResult(
+        'psu-gpu-minimum',
+        'warn',
+        'La GPU no especifica potencia mínima requerida. Verificá manualmente.',
+        ['psu', 'gpu']
+      );
+    }
+
+    // Check if PSU meets GPU's minimum requirement
+    if (psuWattage >= gpuRecommendedPsu) {
+      return createResult(
+        'psu-gpu-minimum',
+        'pass',
+        `Fuente de ${psuWattage}W cumple con los ${gpuRecommendedPsu}W requeridos por la GPU`,
+        ['psu', 'gpu']
+      );
+    }
+
+    return createResult(
+      'psu-gpu-minimum',
+      'fail',
+      `Fuente insuficiente: ${psuWattage}W. La GPU requiere mínimo ${gpuRecommendedPsu}W`,
+      ['psu', 'gpu']
+    );
+  },
+};
+
+/**
  * PSU ↔ Build Power Requirements
  * Estimates total power and checks against PSU wattage
  */
@@ -651,6 +714,7 @@ export const COMPATIBILITY_RULES: CompatibilityRule[] = [
   caseMotherboardFormFactorRule,
   gpuCaseLengthRule,
   caseGpuLengthRule,
+  psuGpuMinimumPowerRule,
   psuPowerRule,
   coolerCpuSocketRule,
   coolerCaseClearanceRule,

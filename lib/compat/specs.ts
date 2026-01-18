@@ -292,6 +292,9 @@ function extractCpuSpecs(product: Product): ProductSpec {
     integratedGraphics = true;
   }
 
+  // Detect if CPU includes a cooler
+  const includesCooler = extractIncludesCooler(product);
+
   return {
     socket,
     cores,
@@ -300,7 +303,64 @@ function extractCpuSpecs(product: Product): ProductSpec {
     cpuGeneration,
     cpuFamily,
     integratedGraphics,
+    includesCooler,
   };
+}
+
+/**
+ * Extract if CPU includes a cooler from product data
+ */
+function extractIncludesCooler(product: Product): boolean {
+  const text = `${product.title} ${product.description}`;
+  
+  // Check for explicit mentions in title/description
+  // Positive patterns (includes cooler)
+  if (/\b(incluye|incluido|include[sd]?|con|with)\s+(cooler|disipador|ventilador)/i.test(text)) {
+    return true;
+  }
+  if (/\b(cooler|disipador)\s+(incluido|included)/i.test(text)) {
+    return true;
+  }
+  
+  // Negative patterns (does NOT include cooler)
+  if (/\b(sin|without|no\s+incluye|not\s+included?)\s+(cooler|disipador|ventilador)/i.test(text)) {
+    return false;
+  }
+  if (/\b(cooler|disipador)\s+(no\s+incluido|not\s+included?)/i.test(text)) {
+    return false;
+  }
+  
+  // Check in attribute groups for "Incluye cooler" attribute
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        // Look for "Incluye cooler", "Include cooler", etc.
+        if (/incluye|include[sd]?|con|with/i.test(attr.name) && /cooler|disipador|ventilador/i.test(attr.name)) {
+          const value = attr.value.toLowerCase().trim();
+          if (value === 'si' || value === 'sí' || value === 'yes' || value === 'true') {
+            return true;
+          }
+          if (value === 'no' || value === 'false') {
+            return false;
+          }
+        }
+        
+        // Also check if value contains cooler info
+        if (/cooler|disipador/i.test(attr.name)) {
+          const value = attr.value.toLowerCase().trim();
+          if (value === 'incluido' || value === 'included' || value === 'si' || value === 'sí' || value === 'yes') {
+            return true;
+          }
+          if (value === 'no incluido' || value === 'not included' || value === 'no' || value === 'sin cooler') {
+            return false;
+          }
+        }
+      }
+    }
+  }
+  
+  // Default: assume most CPUs do NOT include a cooler unless explicitly stated
+  return false;
 }
 
 /**
@@ -509,17 +569,56 @@ function extractGpuLength(product: Product): number | undefined {
 }
 
 /**
+ * Extract GPU recommended PSU wattage from product
+ */
+function extractGpuRecommendedPsu(product: Product): number | undefined {
+  const text = `${product.title} ${product.description}`;
+  
+  // Pattern 1: "Fuente recomendada: 650W", "Recommended PSU: 650W"
+  let psu = extractNumber(text, /(?:fuente|PSU|power supply)\s*(?:recomendada?|m[ií]nima?|recommended|minimum|required)[:\s]*(\d{3,4})\s*W/i);
+  if (psu) return psu;
+  
+  // Pattern 2: "Recomendada 650W", "Minimum 650W"
+  psu = extractNumber(text, /(?:recomendada?|m[ií]nima?|recommended|minimum|required)[:\s]*(\d{3,4})\s*W/i);
+  if (psu) return psu;
+  
+  // Pattern 3: "650W recomendada", "650W recommended"
+  psu = extractNumber(text, /(\d{3,4})\s*W\s*(?:fuente|PSU|power supply)?\s*(?:recomendada?|m[ií]nima?|recommended|minimum|required)/i);
+  if (psu) return psu;
+  
+  // Pattern 4: "Requiere fuente de 650W", "Requires 650W PSU"
+  psu = extractNumber(text, /(?:requiere|requires?|necesita|needs?)\s*(?:fuente|PSU|power supply)?\s*(?:de|of)?\s*(\d{3,4})\s*W/i);
+  if (psu) return psu;
+  
+  // Pattern 5: Look in attribute groups for power/fuente related attributes
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        const attrText = `${attr.name} ${attr.value}`;
+        
+        // Look for power/PSU related attributes
+        if (/fuente|PSU|power|potencia|alimentaci[oó]n/i.test(attr.name)) {
+          const attrPsu = extractNumber(attrText, /(\d{3,4})\s*W/i);
+          if (attrPsu && attrPsu >= 300 && attrPsu <= 2000) {
+            return attrPsu;
+          }
+        }
+      }
+    }
+  }
+  
+  return undefined;
+}
+
+/**
  * Extract GPU specs from product
  */
 function extractGpuSpecs(product: Product): ProductSpec {
-  const text = `${product.title} ${product.description}`;
-
   // GPU length with improved extraction
   const gpuLength = extractGpuLength(product);
 
-  // Recommended PSU
-  const gpuRecommendedPsu = extractNumber(text, /(?:recomendada?|recommended)\s*(\d+)\s*W/i)
-    ?? extractNumber(text, /(\d+)\s*W\s*(?:fuente|PSU|recomendad)/i);
+  // Recommended PSU with improved extraction
+  const gpuRecommendedPsu = extractGpuRecommendedPsu(product);
 
   return {
     gpuLength,

@@ -399,7 +399,7 @@ export function createIncludedCoolerProduct(): Product {
     price: 0,
     currency: 'USD',
     stock: 999,
-    imageUrl: 'COOLER_ICON',
+    imageUrl: '',
     images: [],
     categories: [],
     identifiers: {
@@ -412,4 +412,3 @@ export function createIncludedCoolerProduct(): Product {
     attributeGroups: [],
   };
 }
-

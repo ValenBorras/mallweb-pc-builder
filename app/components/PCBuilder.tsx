@@ -6,8 +6,8 @@ import { CategorySelector } from './CategorySelector';
 import { SearchBar } from './SearchBar';
 import { ProductList } from './ProductList';
 import { SubCategoryTabs } from './SubCategoryTabs';
-import { useBuildStore, useMaxRamSlots } from '@/store/buildStore';
-import { CATEGORIES, hasSubCategories, getMainCategories, isGpuRequired, type CategoryKey } from '@/lib/catalog/categories';
+import { useBuildStore, useMaxRamSlots, useCpuIncludesCooler, createIncludedCoolerProduct } from '@/store/buildStore';
+import { CATEGORIES, hasSubCategories, getMainCategories, isGpuRequired, isCoolerRequired, type CategoryKey } from '@/lib/catalog/categories';
 import { getCategoryIcon } from '@/lib/catalog/icons';
 import { filterProductsByCategory } from '@/lib/catalog/filters';
 import type { Product } from '@/lib/mallweb/normalize';
@@ -41,6 +41,7 @@ export function PCBuilder() {
   const selectedPart = parts[activeCategory];
   const category = CATEGORIES[activeCategory];
   const maxRamSlots = useMaxRamSlots();
+  const cpuIncludesCooler = useCpuIncludesCooler();
   
   // Determine the parent category and if we should show sub-tabs
   const parentCategory = category.parentCategory || activeCategory;
@@ -121,13 +122,34 @@ export function PCBuilder() {
     );
     
     // Sort by price (cheapest first)
-    const sorted = compatFiltered.sort((a, b) => a.product.price - b.product.price);
+    let sorted = compatFiltered.sort((a, b) => a.product.price - b.product.price);
+    
+    // Special handling for cooler category: Add "use included cooler" option if CPU includes one
+    if (activeCategory === 'cooler' && cpuIncludesCooler) {
+      const includedCoolerProduct = createIncludedCoolerProduct();
+      // Create a perfect compatibility result for the included cooler
+      const includedCoolerCompatibility: CompatibilityResult = {
+        productId: includedCoolerProduct.id,
+        allowed: true,
+        results: [],
+        warnings: [],
+        failures: [],
+        hasUnknownChecks: false,
+      };
+      
+      // Add the "use included cooler" option at the beginning
+      sorted = [
+        { product: includedCoolerProduct, compatibility: includedCoolerCompatibility },
+        ...sorted
+      ];
+    }
     
     setFilteredProducts(sorted);
-  }, [searchResults, activeCategory, parts, showIncompatible, getBuild]);
+  }, [searchResults, activeCategory, parts, showIncompatible, getBuild, cpuIncludesCooler]);
 
-  // Load initial products when category changes
+  // Load initial products when category changes and reset to page 1
   useEffect(() => {
+    setCurrentPage(1);
     performSearch('', 1);
   }, [activeCategory, performSearch]);
 
@@ -137,6 +159,27 @@ export function PCBuilder() {
 
   const handlePageChange = (page: number) => {
     performSearch('', page);
+  };
+
+  // Calculate effective total pages based on filtered products
+  // If we have fewer filtered products than the page size, we're on the last page
+  const effectiveTotalPages = () => {
+    if (!searchResults) return 1;
+    
+    // If we have very few filtered products (less than would fit in one page)
+    // and we're on page 1, don't show pagination
+    const RESULTS_PER_PAGE = 50;
+    if (filteredProducts.length < RESULTS_PER_PAGE && currentPage === 1) {
+      return 1;
+    }
+    
+    // If we're on a page beyond 1 and have no products, we've gone too far
+    if (filteredProducts.length === 0 && currentPage > 1) {
+      return currentPage - 1;
+    }
+    
+    // Otherwise use the API's totalPages
+    return searchResults.totalPages;
   };
 
   // Get next required category that doesn't have a part selected
@@ -156,6 +199,10 @@ export function PCBuilder() {
         const cpuPart = parts.cpu;
         const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
         isRequired = isGpuRequired(cpuHasGraphics);
+      } else if (cat.key === 'cooler') {
+        const cpuPart = parts.cpu;
+        const cpuHasCooler = !Array.isArray(cpuPart) && cpuPart?.spec.includesCooler;
+        isRequired = isCoolerRequired(cpuHasCooler);
       }
       
       if (isRequired && !hasPart) {
@@ -174,6 +221,10 @@ export function PCBuilder() {
         const cpuPart = parts.cpu;
         const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
         isRequired = isGpuRequired(cpuHasGraphics);
+      } else if (cat.key === 'cooler') {
+        const cpuPart = parts.cpu;
+        const cpuHasCooler = !Array.isArray(cpuPart) && cpuPart?.spec.includesCooler;
+        isRequired = isCoolerRequired(cpuHasCooler);
       }
       
       if (isRequired && !hasPart) {
@@ -341,7 +392,7 @@ export function PCBuilder() {
               isLoading={isLoading}
               error={error}
               currentPage={currentPage}
-              totalPages={searchResults?.totalPages ?? 1}
+              totalPages={effectiveTotalPages()}
               onPageChange={handlePageChange}
               categoryKey={activeCategory}
             />

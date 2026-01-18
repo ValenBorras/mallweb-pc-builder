@@ -131,7 +131,7 @@ const FILTER_RULES: Record<CategoryKey, CategoryFilterRules> = {
     comboNote: '💡 Este gabinete puede incluir fuente de poder. Verificá las especificaciones.',
   },
   cooler: {
-    // Match: "Coolers"
+    // Match: "Coolers" - Only CPU coolers, not case fans
     includePatterns: [
       /coolers?/i,
       /refrigeracion/i,
@@ -149,6 +149,19 @@ const FILTER_RULES: Record<CategoryKey, CategoryFilterRules> = {
       /cooler.*base/i,
       /pad/i,
       /stand/i,
+      /\bfan\b(?!.*cpu)/i,           // "Fan" but not if followed by "CPU"
+      /ventilador(?!.*cpu)/i,        // "Ventilador" but not if followed by "CPU"
+      /cooler.*gabinete/i,           // "Cooler para gabinete"
+      /gabinete.*cooler/i,           // "Gabinete cooler"
+      /cooler.*case/i,               // "Cooler for case"
+      /case.*fan/i,                  // "Case fan"
+      /fan.*case/i,                  // "Fan case"
+      /fan.*gabinete/i,              // "Fan para gabinete"
+      /gabinete.*fan/i,              // "Gabinete fan"
+      /\d+mm.*fan/i,                 // "120mm fan", "140mm fan" (typical case fans)
+      /fan.*\d+mm/i,                 // "Fan 120mm"
+      /rgb.*fan(?!.*cpu)/i,          // "RGB Fan" but not if CPU mentioned
+      /fan.*rgb(?!.*cpu)/i,          // "Fan RGB"
     ],
   },
   monitor: {
@@ -331,10 +344,129 @@ export function getComboNote(categoryKey: CategoryKey): string | undefined {
 }
 
 /**
+ * Check if a cooler product is a CPU cooler (not a case fan)
+ * Analyzes title, description, and attributes
+ */
+function isCpuCooler(product: Product): boolean {
+  const text = `${product.title} ${product.description}`.toLowerCase();
+  const title = product.title.toLowerCase();
+  
+  // ==========================================
+  // STEP 1: EXCLUSION CHECKS (HIGHEST PRIORITY)
+  // ==========================================
+  
+  // Specific fan model patterns that should ALWAYS be excluded
+  const specificFanModels = [
+    /\bmf\s*120/i,                 // MF120, MF 120 (MasterFan 120mm)
+    /\bmf\s*140/i,                 // MF140, MF 140 (MasterFan 140mm)
+    /\bsf\s*120/i,                 // SF120, SF 120 (SickleFlow 120mm)
+    /\bsf\s*140/i,                 // SF140, SF 140 (SickleFlow 140mm)
+    /\bll\s*120/i,                 // LL120, LL 120 (Corsair fan)
+    /\bql\s*120/i,                 // QL120, QL 120 (Corsair fan)
+    /\bml\s*120/i,                 // ML120, ML 120 (Corsair fan)
+    /\bll\s*140/i,                 // LL140
+    /\bql\s*140/i,                 // QL140
+    /\bml\s*140/i,                 // ML140
+  ];
+  
+  // Check specific models FIRST (highest priority exclusion)
+  if (specificFanModels.some(pattern => pattern.test(title))) {
+    return false;
+  }
+  
+  // General case fan indicators (exclusion)
+  const caseFanIndicators = [
+    /ventilador\s+de\s+chasis/i,   // "ventilador de chasis" (case fan in Spanish)
+    /\b120\b/i,                    // "120" or "120mm" - typical case fan size
+    /\b140\b/i,                    // "140" or "140mm" - typical case fan size
+    /\blite\s+(argb|rgb)/i,        // "Lite ARGB/RGB" typically case fans
+    /\bfan\s+\d+mm/i,              // "Fan 120mm"
+    /\d+mm\s+fan/i,                // "120mm fan"
+    /ventilador.*gabinete/i,       // "Ventilador para gabinete"
+    /gabinete.*ventilador/i,       // "Gabinete ventilador"
+    /case\s+fan/i,                 // "Case fan"
+    /fan.*case/i,                  // "Fan case"
+    /pack.*fan/i,                  // "Pack 3 fans"
+    /fan.*pack/i,                  // "Fan pack"
+    /rgb.*fan(?!.*cpu)/i,          // "RGB Fan" (without CPU)
+    /argb.*fan/i,                  // "ARGB Fan"
+  ];
+  
+  // If it matches case fan indicators, it's NOT a CPU cooler
+  if (caseFanIndicators.some(pattern => pattern.test(text))) {
+    return false;
+  }
+  
+  // ==========================================
+  // STEP 2: INCLUSION CHECKS (CPU COOLER INDICATORS)
+  // ==========================================
+  
+  // Strong CPU cooler indicators
+  const cpuCoolerIndicators = [
+    /\bcpu\s+cooler/i,
+    /cooler\s+cpu/i,
+    /cooler.*procesador/i,
+    /procesador.*cooler/i,
+    /disipador.*cpu/i,
+    /cpu.*disipador/i,
+    /\baio\b/i,                        // All-in-One liquid coolers are CPU coolers
+    /refrigeraci[oó]n\s+l[ií]quida/i,  // Liquid cooling
+    /water\s+cool/i,                    // Water cooler
+    /torre.*cpu/i,                      // Torre CPU
+    /cpu.*torre/i,                      // CPU Torre
+    /socket\s+(am4|am5|lga|tr4|strx4)/i, // CPU sockets
+    /compatible.*(?:am4|am5|lga\d+|intel|amd|ryzen)/i, // CPU compatibility
+    /\bhyper\s+\d+/i,                   // Hyper 212, Hyper 411, etc (CPU coolers)
+    /\bdark\s+rock/i,                   // Dark Rock series (CPU coolers)
+    /\bnoctua\s+nh/i,                   // Noctua NH series (CPU coolers)
+  ];
+  
+  // If it matches CPU cooler indicators, it's a CPU cooler
+  if (cpuCoolerIndicators.some(pattern => pattern.test(text))) {
+    return true;
+  }
+  
+  // Check attributes for socket compatibility (strong indicator of CPU cooler)
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        const attrText = `${attr.name} ${attr.value}`.toLowerCase();
+        
+        // Look for socket/compatibility attributes
+        if (/socket|compatib/i.test(attr.name)) {
+          if (/am4|am5|lga|tr4|strx4|intel|amd|ryzen/i.test(attr.value)) {
+            return true;
+          }
+        }
+        
+        // Look for TDP rating (CPU coolers have TDP ratings)
+        if (/tdp/i.test(attrText)) {
+          return true;
+        }
+      }
+    }
+  }
+  
+  // Don't use generic "cooler" in title as indicator anymore
+  // Only accept products that have explicit CPU cooler indicators
+  // or socket/TDP information in attributes
+  
+  // Default to false for safety (better to exclude a CPU cooler than include a case fan)
+  return false;
+}
+
+/**
  * Filter products for a specific category
  */
 export function filterProductsByCategory(products: Product[], categoryKey: CategoryKey): Product[] {
-  return products.filter((product) => shouldIncludeProduct(product, categoryKey));
+  const filtered = products.filter((product) => shouldIncludeProduct(product, categoryKey));
+  
+  // Special filtering for coolers: only include CPU coolers
+  if (categoryKey === 'cooler') {
+    return filtered.filter((product) => isCpuCooler(product));
+  }
+  
+  return filtered;
 }
 
 /**

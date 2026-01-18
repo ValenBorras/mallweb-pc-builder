@@ -19,6 +19,7 @@ export interface ProductSpec {
   cpuGeneration?: string;    // e.g., "Ryzen 5000", "Ryzen 7000", "13th Gen", "14th Gen"
   cpuFamily?: string;        // e.g., "Ryzen 5", "Ryzen 7", "Core i5", "Core i7"
   integratedGraphics?: boolean;
+  includesCooler?: boolean;  // Whether CPU includes a cooler
 
   // Motherboard specs
   chipset?: string;          // e.g., "B550", "X570", "B650", "Z690", "Z790"
