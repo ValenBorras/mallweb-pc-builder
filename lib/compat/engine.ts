@@ -142,11 +142,34 @@ export function getBuildCompatibilitySummary(
     : cpuPart?.spec.integratedGraphics;
   const gpuRequired = !cpuHasGraphics; // GPU required if CPU has no integrated graphics
   
-  const requiredCategories: CategoryKey[] = gpuRequired
-    ? ['cpu', 'motherboard', 'ram', 'storage', 'psu', 'case', 'gpu']
-    : ['cpu', 'motherboard', 'ram', 'storage', 'psu', 'case'];
+  // Cooler is required unless CPU explicitly includes one
+  const cpuIncludesCooler = Array.isArray(cpuPart) 
+    ? cpuPart[0]?.spec.includesCooler 
+    : cpuPart?.spec.includesCooler;
+  // IMPORTANT: If CPU doesn't explicitly say it includes a cooler (undefined or false), require one
+  const coolerRequired = cpuIncludesCooler !== true; // Cooler required unless CPU explicitly includes one
+  
+  // Base required categories
+  const baseRequired: CategoryKey[] = ['cpu', 'motherboard', 'ram', 'storage', 'psu', 'case'];
+  
+  // Add GPU if required
+  if (gpuRequired) {
+    baseRequired.push('gpu');
+  }
+  
+  // Add cooler if required
+  if (coolerRequired) {
+    baseRequired.push('cooler');
+  }
+  
+  const requiredCategories: CategoryKey[] = baseRequired;
   
   const isComplete = requiredCategories.every((cat) => build.has(cat));
+  
+  // Add specific error if cooler is required but not present
+  if (coolerRequired && !build.has('cooler')) {
+    uniqueFailures.push('El CPU seleccionado no incluye cooler. Debes agregar un cooler para CPU.');
+  }
 
   return {
     isComplete,

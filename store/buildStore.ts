@@ -16,6 +16,9 @@ const MULTI_SELECT_CATEGORIES: CategoryKey[] = ['ram', 'storage'];
 // Special ID for "use included cooler" option
 export const USE_INCLUDED_COOLER_ID = '__use_included_cooler__';
 
+// Special ID for "use included PSU" option
+export const USE_INCLUDED_PSU_ID = '__use_included_psu__';
+
 // Helper type for items with quantity (used in multi-select categories)
 export interface ProductWithQuantity {
   product: ProductWithSpec;
@@ -76,6 +79,127 @@ export const useBuildStore = create<BuildState>()(
 
       setPart: (category, product) => {
         const productWithSpec = createProductWithSpec(product, category);
+        
+        // Special handling for cases with included PSU
+        if (category === 'case' && productWithSpec.spec.includesPsu) {
+          const currentPsu = get().parts.psu;
+          
+          // If there's already a PSU selected and it's not the included one
+          if (currentPsu && !Array.isArray(currentPsu) && currentPsu.product.id !== USE_INCLUDED_PSU_ID) {
+            // Show alert
+            if (typeof window !== 'undefined') {
+              alert('Este gabinete incluye fuente de poder. La fuente seleccionada anteriormente será reemplazada por la fuente incluida.');
+            }
+          }
+          
+          // Set the case
+          set((state) => ({
+            parts: {
+              ...state.parts,
+              [category]: productWithSpec,
+            },
+          }));
+          
+          // Auto-select the included PSU with the wattage from the case
+          const includedPsu = createIncludedPsuProduct(productWithSpec.spec.includedPsuWattage);
+          const includedPsuWithSpec = createProductWithSpec(includedPsu, 'psu');
+          // Override the wattage in the spec to ensure compatibility checks work
+          includedPsuWithSpec.spec.psuWattage = productWithSpec.spec.includedPsuWattage;
+          set((state) => ({
+            parts: {
+              ...state.parts,
+              psu: includedPsuWithSpec,
+            },
+          }));
+          
+          return;
+        }
+        
+        // Special handling for PSU: check if case has included PSU
+        if (category === 'psu') {
+          const currentCase = get().parts.case;
+          
+          // If there's a case with included PSU selected
+          if (currentCase && !Array.isArray(currentCase) && currentCase.spec.includesPsu) {
+            // Show alert that the case includes a PSU
+            if (typeof window !== 'undefined') {
+              alert('El gabinete actual incluye una fuente de poder. Si seleccionas esta fuente, se usará en lugar de la incluida.');
+            }
+          }
+        }
+        
+        // Special handling for CPU: remove "use included cooler" if new CPU doesn't include one
+        if (category === 'cpu') {
+          const currentCooler = get().parts.cooler;
+          const newCpuIncludesCooler = productWithSpec.spec.includesCooler;
+          
+          // If there's a cooler selected and it's the "use included cooler" option
+          if (currentCooler && !Array.isArray(currentCooler) && currentCooler.product.id === USE_INCLUDED_COOLER_ID) {
+            // If the new CPU doesn't include a cooler, remove the "use included cooler" option
+            if (!newCpuIncludesCooler) {
+              set((state) => ({
+                parts: {
+                  ...state.parts,
+                  cpu: productWithSpec,
+                  cooler: null, // Remove the included cooler option
+                },
+              }));
+              
+              if (typeof window !== 'undefined') {
+                alert('El nuevo CPU no incluye cooler. Debes seleccionar un cooler por separado.');
+              }
+              
+              return;
+            }
+          }
+        }
+        
+        // Special handling for Motherboard: adjust RAM if it exceeds new slot count
+        if (category === 'motherboard') {
+          const newMotherboardSlots = productWithSpec.spec.memorySlots ?? 4; // Default to 4 if not specified
+          const currentRam = get().parts.ram;
+          
+          if (Array.isArray(currentRam) && currentRam.length > 0) {
+            // Count total RAM sticks
+            const totalRamSticks = currentRam.reduce((sum, item) => sum + item.quantity, 0);
+            
+            // If current RAM exceeds new motherboard's slots
+            if (totalRamSticks > newMotherboardSlots) {
+              if (typeof window !== 'undefined') {
+                alert(`La nueva motherboard tiene ${newMotherboardSlots} slots de RAM, pero tienes ${totalRamSticks} módulos. Se ajustará automáticamente.`);
+              }
+              
+              // Adjust RAM to fit within new slot count
+              const adjustedRam: ProductWithQuantity[] = [];
+              let slotsUsed = 0;
+              
+              for (const ramItem of currentRam) {
+                const slotsAvailable = newMotherboardSlots - slotsUsed;
+                if (slotsAvailable <= 0) break;
+                
+                const quantityToKeep = Math.min(ramItem.quantity, slotsAvailable);
+                if (quantityToKeep > 0) {
+                  adjustedRam.push({
+                    ...ramItem,
+                    quantity: quantityToKeep,
+                  });
+                  slotsUsed += quantityToKeep;
+                }
+              }
+              
+              // Set the motherboard and adjusted RAM
+              set((state) => ({
+                parts: {
+                  ...state.parts,
+                  motherboard: productWithSpec,
+                  ram: adjustedRam,
+                },
+              }));
+              
+              return;
+            }
+          }
+        }
         
         // For multi-select categories, replace the array with a single item with quantity 1
         if (MULTI_SELECT_CATEGORIES.includes(category)) {
@@ -158,6 +282,47 @@ export const useBuildStore = create<BuildState>()(
             return state;
           });
         } else {
+          // Special handling for cases with included PSU
+          if (category === 'case') {
+            const currentCase = get().parts.case;
+            const currentPsu = get().parts.psu;
+            
+            // If case includes PSU and the current PSU is the included one, remove both
+            if (currentCase && !Array.isArray(currentCase) && currentCase.spec.includesPsu) {
+              if (currentPsu && !Array.isArray(currentPsu) && currentPsu.product.id === USE_INCLUDED_PSU_ID) {
+                set((state) => ({
+                  parts: {
+                    ...state.parts,
+                    case: null,
+                    psu: null,
+                  },
+                }));
+                return;
+              }
+            }
+          }
+          
+          // Special handling for PSU removal
+          if (category === 'psu') {
+            const currentCase = get().parts.case;
+            
+            // If there's a case with included PSU, restore the included PSU instead of removing completely
+            if (currentCase && !Array.isArray(currentCase) && currentCase.spec.includesPsu) {
+              const includedPsu = createIncludedPsuProduct(currentCase.spec.includedPsuWattage);
+              const includedPsuWithSpec = createProductWithSpec(includedPsu, 'psu');
+              // Override the wattage in the spec to ensure compatibility checks work
+              includedPsuWithSpec.spec.psuWattage = currentCase.spec.includedPsuWattage;
+              
+              set((state) => ({
+                parts: {
+                  ...state.parts,
+                  psu: includedPsuWithSpec,
+                },
+              }));
+              return;
+            }
+          }
+          
           // Remove entire category
           set((state) => ({
             parts: {
@@ -405,6 +570,61 @@ export function createIncludedCoolerProduct(): Product {
     categories: [],
     identifiers: {
       sku: USE_INCLUDED_COOLER_ID,
+    },
+    rating: {
+      votes: 0,
+      value: 0,
+    },
+    attributeGroups: [],
+  };
+}
+
+/**
+ * Hook to check if the selected case includes a PSU
+ */
+export function useCaseIncludesPsu(): boolean {
+  return useBuildStore((state) => {
+    const caseProduct = state.parts.case;
+    if (caseProduct && !Array.isArray(caseProduct)) {
+      return caseProduct.spec.includesPsu ?? false;
+    }
+    return false;
+  });
+}
+
+/**
+ * Hook to check if "use included PSU" option is selected
+ */
+export function useIsUsingIncludedPsu(): boolean {
+  return useBuildStore((state) => {
+    const psu = state.parts.psu;
+    if (psu && !Array.isArray(psu)) {
+      return psu.product.id === USE_INCLUDED_PSU_ID;
+    }
+    return false;
+  });
+}
+
+/**
+ * Create a dummy product representing "use included PSU"
+ */
+export function createIncludedPsuProduct(wattage?: number): Product {
+  const wattageText = wattage ? ` (${wattage}W)` : '';
+  return {
+    id: USE_INCLUDED_PSU_ID,
+    title: `Usar fuente incluida con gabinete${wattageText}`,
+    description: wattage 
+      ? `Utilizar la fuente de poder de ${wattage}W que viene incluida con el gabinete`
+      : 'Utilizar la fuente de poder que viene incluida con el gabinete',
+    brand: '',
+    price: 0,
+    currency: 'USD',
+    stock: 999,
+    imageUrl: 'PSU_ICON',
+    images: [],
+    categories: [],
+    identifiers: {
+      sku: USE_INCLUDED_PSU_ID,
     },
     rating: {
       votes: 0,

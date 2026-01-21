@@ -289,6 +289,24 @@ export function PCBuilder() {
 
   const handleIncrementQuantity = (productId: string) => {
     incrementQuantity(activeCategory, productId);
+    
+    // For RAM, check if we've reached the maximum slots after incrementing
+    if (activeCategory === 'ram') {
+      setTimeout(() => {
+        const updatedRamQuantity = useBuildStore.getState().parts.ram;
+        const totalRamItems = Array.isArray(updatedRamQuantity) 
+          ? updatedRamQuantity.reduce((sum, item) => sum + item.quantity, 0)
+          : 0;
+        
+        if (totalRamItems >= maxRamSlots) {
+          // Auto-advance to next required category
+          const nextCategory = getNextRequiredCategory();
+          if (nextCategory) {
+            setActiveCategory(nextCategory);
+          }
+        }
+      }, 100);
+    }
   };
 
   const handleDecrementQuantity = (productId: string) => {
@@ -336,7 +354,7 @@ export function PCBuilder() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8 pb-32 lg:pb-8">
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8 pb-36 md:pb-40 lg:pb-40">
         <div className="flex gap-6 lg:gap-8">
           {/* Left sidebar - Categories */}
           <aside className="w-64 xl:w-72 shrink-0 hidden lg:block">
@@ -489,7 +507,7 @@ function BottomCheckoutBar({
       {/* Overlay for categories */}
       {showCategories && (
         <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 pointer-events-auto"
           onClick={() => setShowCategories(false)}
         />
       )}
@@ -497,7 +515,7 @@ function BottomCheckoutBar({
       {/* Bottom bar */}
       <div className="w-full lg:w-64 xl:w-72">
         {/* Stacked layout - Total on top, Checkout below */}
-        <div className="flex flex-col gap-2 md:gap-3 bg-gradient-to-t from-slate-100 via-slate-100/95 to-transparent lg:from-transparent lg:via-transparent lg:to-transparent pt-4 lg:pt-0 pointer-events-none">
+        <div className="flex flex-col gap-2 md:gap-3 bg-gradient-to-t from-slate-100 via-slate-100 to-slate-100/80 lg:from-transparent lg:via-transparent lg:to-transparent pt-6 pb-2 lg:pt-0 lg:pb-0 pointer-events-none">
           {/* Total display (non-clickable) */}
           <div className="w-full p-3 md:p-4 rounded-xl md:rounded-2xl bg-gray-800 shadow-lg shadow-gray-800/25 flex items-center justify-between pointer-events-auto">
             <div className="flex items-center gap-2 md:gap-3">
@@ -523,7 +541,7 @@ function BottomCheckoutBar({
 
           {/* Checkout button (below) */}
           <button
-            onClick={() => canCheckout ? setShowSummary(true) : null}
+            onClick={() => setShowSummary(true)}
             disabled={partCount === 0}
             className={`
               w-full p-3 md:p-4 rounded-xl md:rounded-2xl font-bold text-sm md:text-base transition-all pointer-events-auto
@@ -551,7 +569,7 @@ function BottomCheckoutBar({
 
         {/* Categories Modal (Mobile) */}
         {showCategories && (
-          <div className="rounded-2xl overflow-hidden shadow-2xl bg-white max-h-[75vh] flex flex-col relative z-50">
+          <div className="fixed bottom-20 left-4 right-4 rounded-2xl overflow-hidden shadow-2xl bg-white max-h-[75vh] flex flex-col z-50 pointer-events-auto">
             {/* Header */}
             <div className="p-3 md:p-4 bg-gradient-to-br from-red-50 to-red-100/50 border-b-2 border-red-200/50 shrink-0">
               <div className="flex items-center justify-between mb-2">
@@ -706,6 +724,9 @@ function BottomCheckoutBar({
                   if (category.key === 'gpu') {
                     const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
                     isDynamicallyRequired = isGpuRequired(cpuHasGraphics);
+                  } else if (category.key === 'cooler') {
+                    const cpuHasCooler = !Array.isArray(cpuPart) && cpuPart?.spec.includesCooler;
+                    isDynamicallyRequired = isCoolerRequired(cpuHasCooler);
                   }
 
                   let productImage: string | null = null;

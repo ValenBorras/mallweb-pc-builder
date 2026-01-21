@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CATEGORIES, getMainCategories, getSubCategories, hasSubCategories, isGpuRequired, type CategoryKey } from '@/lib/catalog/categories';
+import { CATEGORIES, getMainCategories, getSubCategories, hasSubCategories, isGpuRequired, isCoolerRequired, type CategoryKey } from '@/lib/catalog/categories';
 import { getCategoryIcon } from '@/lib/catalog/icons';
 import { usePart, useBuildStore } from '@/store/buildStore';
 
@@ -123,6 +123,10 @@ function CategoryItem({
     // GPU is required only if CPU doesn't have integrated graphics
     const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
     isDynamicallyRequired = isGpuRequired(cpuHasGraphics);
+  } else if (categoryKey === 'cooler') {
+    // Cooler is required only if CPU doesn't include one
+    const cpuHasCooler = !Array.isArray(cpuPart) && cpuPart?.spec.includesCooler;
+    isDynamicallyRequired = isCoolerRequired(cpuHasCooler);
   }
 
   // Get product image and title if part is selected

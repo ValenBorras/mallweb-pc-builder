@@ -51,6 +51,8 @@ export interface ProductSpec {
   maxPsuLength?: number;     // mm
   drivesBays25?: number;     // 2.5" drive bays
   drivesBays35?: number;     // 3.5" drive bays
+  includesPsu?: boolean;     // Whether case includes a PSU
+  includedPsuWattage?: number; // Wattage of included PSU (if any)
 
   // PSU specs
   psuWattage?: number;       // Watts

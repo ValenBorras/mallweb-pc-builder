@@ -321,6 +321,13 @@ function extractIncludesCooler(product: Product): boolean {
   if (/\b(cooler|disipador)\s+(incluido|included)/i.test(text)) {
     return true;
   }
+  // Check for "Included Thermal Solution" or similar
+  if (/\b(included|incluido|incluye)\s+(thermal\s+solution|solución\s+térmica)/i.test(text)) {
+    return true;
+  }
+  if (/\b(thermal\s+solution|solución\s+térmica)\s+(included|incluido)/i.test(text)) {
+    return true;
+  }
   
   // Negative patterns (does NOT include cooler)
   if (/\b(sin|without|no\s+incluye|not\s+included?)\s+(cooler|disipador|ventilador)/i.test(text)) {
@@ -329,24 +336,28 @@ function extractIncludesCooler(product: Product): boolean {
   if (/\b(cooler|disipador)\s+(no\s+incluido|not\s+included?)/i.test(text)) {
     return false;
   }
+  // Check for "NOT included thermal solution" or similar
+  if (/\b(sin|without|no\s+incluye|not\s+included?)\s+(thermal\s+solution|solución\s+térmica)/i.test(text)) {
+    return false;
+  }
   
   // Check in attribute groups for "Incluye cooler" attribute
   if (product.attributeGroups) {
     for (const group of product.attributeGroups) {
       for (const attr of group.attributes) {
-        // Look for "Incluye cooler", "Include cooler", etc.
-        if (/incluye|include[sd]?|con|with/i.test(attr.name) && /cooler|disipador|ventilador/i.test(attr.name)) {
+        // Look for "Incluye cooler", "Include cooler", "Thermal Solution", etc.
+        if (/incluye|include[sd]?|con|with|thermal|térmica/i.test(attr.name) && /cooler|disipador|ventilador|solution|solución/i.test(attr.name)) {
           const value = attr.value.toLowerCase().trim();
-          if (value === 'si' || value === 'sí' || value === 'yes' || value === 'true') {
+          if (value === 'si' || value === 'sí' || value === 'yes' || value === 'true' || value === 'included' || value === 'incluido') {
             return true;
           }
-          if (value === 'no' || value === 'false') {
+          if (value === 'no' || value === 'false' || value === 'not included' || value === 'no incluido') {
             return false;
           }
         }
         
         // Also check if value contains cooler info
-        if (/cooler|disipador/i.test(attr.name)) {
+        if (/cooler|disipador|thermal\s+solution|solución\s+térmica/i.test(attr.name)) {
           const value = attr.value.toLowerCase().trim();
           if (value === 'incluido' || value === 'included' || value === 'si' || value === 'sí' || value === 'yes') {
             return true;
@@ -632,8 +643,12 @@ function extractGpuSpecs(product: Product): ProductSpec {
 function extractMaxGpuLength(product: Product): number | undefined {
   const text = `${product.title} ${product.description}`;
   
+  // Pattern 0: "Tamaño máximo VGA: 280mm" (Mall Web specific format)
+  let length = extractNumber(text, /Tama[ñn]o\s+m[aá]ximo\s+VGA:\s*(\d{2,3})\s*mm/i);
+  if (length) return length;
+  
   // Pattern 1: "GPU hasta 350mm", "GPU max 350mm", "VGA up to 350mm"
-  let length = extractNumber(text, /(?:GPU|VGA|video|gr[aá]fica|tarjeta de video)[^\d]*(?:hasta|max|up to|m[aá]ximo|soporta)[^\d]*(\d{2,3})\s*mm/i);
+  length = extractNumber(text, /(?:GPU|VGA|video|gr[aá]fica|tarjeta de video)[^\d]*(?:hasta|max|up to|m[aá]ximo|soporta)[^\d]*(\d{2,3})\s*mm/i);
   if (length) return length;
   
   // Pattern 2: "soporta GPU de 350mm", "GPU length 350mm"
@@ -694,6 +709,98 @@ function extractFormFactorsFromAttributes(product: Product): string[] {
 }
 
 /**
+ * Extract maximum CPU cooler height supported by case (in mm)
+ */
+function extractMaxCpuCoolerHeight(product: Product): number | undefined {
+  const text = `${product.title} ${product.description}`;
+  
+  // Pattern 0: "Tamaño máximo CPU cooler: 165mm" (Mall Web specific format)
+  let height = extractNumber(text, /Tama[ñn]o\s+m[aá]ximo\s+CPU\s+cooler:\s*(\d{2,3})\s*mm/i);
+  if (height) return height;
+  
+  // Pattern 1: "cooler hasta 165mm", "CPU cooler max 165mm"
+  height = extractNumber(text, /(?:cooler|disipador|CPU)[^\d]*(?:hasta|max|m[aá]ximo|up to)[^\d]*(\d{2,3})\s*mm/i);
+  if (height) return height;
+  
+  // Pattern 2: "165mm CPU cooler", "165mm de cooler"
+  height = extractNumber(text, /(\d{2,3})\s*mm\s*(?:de\s*)?(?:cooler|disipador|CPU)/i);
+  if (height) return height;
+  
+  // Pattern 3: Generic "cooler" or "disipador" with mm
+  height = extractNumber(text, /(?:cooler|disipador)[^\d]*(\d{2,3})\s*mm/i);
+  if (height) return height;
+  
+  return undefined;
+}
+
+/**
+ * Extract if case includes a PSU and its wattage from product data
+ */
+function extractIncludesPsu(product: Product): { includesPsu: boolean; psuWattage?: number } {
+  const text = `${product.title} ${product.description}`;
+  
+  // Try to detect wattage in patterns like "c/Fuente 600w", "con fuente 600W", "+ Fuente 500w"
+  const wattageMatch = text.match(/(?:c\/|con|with|\+)\s*fuente\s*(\d{3,4})\s*w/i);
+  const detectedWattage = wattageMatch ? parseInt(wattageMatch[1]) : undefined;
+  
+  // Check for explicit mentions in title/description
+  // Positive patterns (includes PSU) - note: \s* allows for optional space (needed for c/Fuente)
+  if (/(incluye|incluido|include[sd]?|con|with|c\/)\s*(fuente|psu|power supply)/i.test(text)) {
+    return { includesPsu: true, psuWattage: detectedWattage };
+  }
+  if (/\b(fuente|psu|power supply)\s+(incluida?|included)/i.test(text)) {
+    return { includesPsu: true, psuWattage: detectedWattage };
+  }
+  // Common patterns like "kit con fuente", "gabinete + fuente"
+  if (/(kit|combo)\s*(con|with|c\/)\s*(fuente|psu)/i.test(text)) {
+    return { includesPsu: true, psuWattage: detectedWattage };
+  }
+  if (/gabinete\s*[\+\/]\s*fuente/i.test(text)) {
+    return { includesPsu: true, psuWattage: detectedWattage };
+  }
+  
+  // Negative patterns (does NOT include PSU)
+  if (/\b(sin|without|no\s+incluye|not\s+included?)\s+(fuente|psu|power supply)/i.test(text)) {
+    return { includesPsu: false };
+  }
+  if (/\b(fuente|psu|power supply)\s+(no\s+incluida?|not\s+included?)/i.test(text)) {
+    return { includesPsu: false };
+  }
+  
+  // Check in attribute groups for "Incluye fuente" attribute
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        // Look for "Incluye fuente", "Include PSU", etc.
+        if (/incluye|include[sd]?|con|with/i.test(attr.name) && /fuente|psu|power supply/i.test(attr.name)) {
+          const value = attr.value.toLowerCase().trim();
+          if (value === 'si' || value === 'sí' || value === 'yes' || value === 'true') {
+            return { includesPsu: true, psuWattage: detectedWattage };
+          }
+          if (value === 'no' || value === 'false') {
+            return { includesPsu: false };
+          }
+        }
+        
+        // Also check if value contains PSU info
+        if (/fuente|psu|power supply/i.test(attr.name)) {
+          const value = attr.value.toLowerCase().trim();
+          if (value === 'incluida' || value === 'included' || value === 'si' || value === 'sí' || value === 'yes') {
+            return { includesPsu: true, psuWattage: detectedWattage };
+          }
+          if (value === 'no incluida' || value === 'not included' || value === 'no' || value === 'sin fuente') {
+            return { includesPsu: false };
+          }
+        }
+      }
+    }
+  }
+  
+  // Default: assume cases do NOT include a PSU unless explicitly stated
+  return { includesPsu: false };
+}
+
+/**
  * Extract case specs from product
  */
 function extractCaseSpecs(product: Product): ProductSpec {
@@ -710,12 +817,18 @@ function extractCaseSpecs(product: Product): ProductSpec {
   // Extract max GPU length with improved patterns
   const maxGpuLength = extractMaxGpuLength(product);
   
-  const maxCpuCoolerHeight = extractNumber(text, /(?:cooler|disipador|CPU)[^\d]*(?:hasta|max)?\s*(\d{2,3})\s*mm/i);
+  // Extract max CPU cooler height with improved patterns
+  const maxCpuCoolerHeight = extractMaxCpuCoolerHeight(product);
+
+  // Detect if case includes a PSU and its wattage
+  const psuInfo = extractIncludesPsu(product);
 
   return {
     supportedFormFactors: supportedFormFactors.length > 0 ? supportedFormFactors : undefined,
     maxGpuLength,
     maxCpuCoolerHeight,
+    includesPsu: psuInfo.includesPsu,
+    includedPsuWattage: psuInfo.psuWattage,
   };
 }
 

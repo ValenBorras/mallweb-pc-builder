@@ -398,6 +398,82 @@ const gpuCaseLengthRule: CompatibilityRule = {
 };
 
 /**
+ * Case ↔ GPU PSU Compatibility (for cases with included PSU)
+ * Checks if the case's included PSU is sufficient for the GPU
+ */
+const caseIncludedPsuGpuRule: CompatibilityRule = {
+  id: 'case-included-psu-gpu',
+  name: 'Case Included PSU/GPU',
+  description: 'La fuente incluida en el gabinete debe ser suficiente para la GPU',
+  sourceCategory: 'case',
+  targetCategories: ['gpu'],
+  evaluate: (candidate, build) => {
+    // Only check if the case includes a PSU AND we can determine its wattage
+    // If we can't determine the wattage, we can't validate, so just pass silently
+    if (!candidate.spec.includesPsu || !candidate.spec.includedPsuWattage) {
+      return createResult(
+        'case-included-psu-gpu',
+        'pass',
+        '', // No message - most cases don't include PSU
+        ['case', 'gpu']
+      );
+    }
+
+    const gpu = build.get('gpu');
+    if (!gpu) {
+      return createResult(
+        'case-included-psu-gpu',
+        'pass',
+        '', // No message needed when there's no GPU
+        ['case', 'gpu']
+      );
+    }
+
+    const includedPsuWattage = candidate.spec.includedPsuWattage;
+    const gpuRecommendedPsu = gpu.spec.gpuRecommendedPsu;
+
+    // If GPU doesn't specify required PSU, we can't validate properly
+    // Just pass silently instead of showing a warning
+    if (!gpuRecommendedPsu) {
+      return createResult(
+        'case-included-psu-gpu',
+        'pass',
+        '', // No message - can't validate without GPU requirements
+        ['case', 'gpu']
+      );
+    }
+
+    // Check if included PSU meets GPU's minimum requirement
+    // PSU must be >= GPU requirement, no exceptions
+    if (includedPsuWattage >= gpuRecommendedPsu) {
+      // PSU meets or exceeds requirement
+      if (includedPsuWattage === gpuRecommendedPsu) {
+        return createResult(
+          'case-included-psu-gpu',
+          'warn',
+          `Fuente incluida de ${includedPsuWattage}W cumple con los ${gpuRecommendedPsu}W requeridos, pero está justa. Se recomienda una fuente mayor.`,
+          ['case', 'gpu']
+        );
+      }
+      return createResult(
+        'case-included-psu-gpu',
+        'pass',
+        `Fuente incluida de ${includedPsuWattage}W cumple con los ${gpuRecommendedPsu}W requeridos por la GPU`,
+        ['case', 'gpu']
+      );
+    }
+
+    // PSU is below requirement - ALWAYS fail, no tolerance
+    return createResult(
+      'case-included-psu-gpu',
+      'fail',
+      `Fuente incluida insuficiente: ${includedPsuWattage}W. La GPU requiere mínimo ${gpuRecommendedPsu}W`,
+      ['case', 'gpu']
+    );
+  },
+};
+
+/**
  * Case ↔ GPU Length Compatibility
  */
 const caseGpuLengthRule: CompatibilityRule = {
@@ -493,7 +569,17 @@ const psuGpuMinimumPowerRule: CompatibilityRule = {
     }
 
     // Check if PSU meets GPU's minimum requirement
+    // PSU must be >= GPU requirement, no exceptions
     if (psuWattage >= gpuRecommendedPsu) {
+      // PSU meets or exceeds requirement
+      if (psuWattage === gpuRecommendedPsu) {
+        return createResult(
+          'psu-gpu-minimum',
+          'warn',
+          `Fuente de ${psuWattage}W cumple con los ${gpuRecommendedPsu}W requeridos, pero está justa. Se recomienda mayor potencia para mayor margen.`,
+          ['psu', 'gpu']
+        );
+      }
       return createResult(
         'psu-gpu-minimum',
         'pass',
@@ -502,11 +588,85 @@ const psuGpuMinimumPowerRule: CompatibilityRule = {
       );
     }
 
+    // PSU is below requirement - ALWAYS fail, no tolerance
     return createResult(
       'psu-gpu-minimum',
       'fail',
       `Fuente insuficiente: ${psuWattage}W. La GPU requiere mínimo ${gpuRecommendedPsu}W`,
       ['psu', 'gpu']
+    );
+  },
+};
+
+/**
+ * GPU ↔ PSU Minimum Power Requirement (Inverse of psuGpuMinimumPowerRule)
+ * Checks if existing PSU meets the GPU's minimum wattage requirement
+ */
+const gpuPsuMinimumPowerRule: CompatibilityRule = {
+  id: 'gpu-psu-minimum',
+  name: 'GPU/PSU Minimum Power',
+  description: 'La GPU requiere una fuente con suficiente potencia',
+  sourceCategory: 'gpu',
+  targetCategories: ['psu'],
+  evaluate: (candidate, build) => {
+    const psu = build.get('psu');
+
+    if (!psu) {
+      return createResult(
+        'gpu-psu-minimum',
+        'pass',
+        'No hay fuente seleccionada',
+        ['gpu', 'psu']
+      );
+    }
+
+    const gpuRecommendedPsu = candidate.spec.gpuRecommendedPsu;
+    const psuWattage = psu.spec.psuWattage;
+
+    if (!gpuRecommendedPsu) {
+      return createResult(
+        'gpu-psu-minimum',
+        'warn',
+        'La GPU no especifica potencia mínima requerida. Verificá manualmente.',
+        ['gpu', 'psu']
+      );
+    }
+
+    if (!psuWattage) {
+      return createResult(
+        'gpu-psu-minimum',
+        'warn',
+        'No se pudo determinar el wattage de la fuente. Verificá manualmente.',
+        ['gpu', 'psu']
+      );
+    }
+
+    // Check if PSU meets GPU's minimum requirement
+    // PSU must be >= GPU requirement, no exceptions
+    if (psuWattage >= gpuRecommendedPsu) {
+      // PSU meets or exceeds requirement
+      if (psuWattage === gpuRecommendedPsu) {
+        return createResult(
+          'gpu-psu-minimum',
+          'warn',
+          `Fuente de ${psuWattage}W cumple con los ${gpuRecommendedPsu}W requeridos, pero está justa. Se recomienda mayor potencia para mayor margen.`,
+          ['gpu', 'psu']
+        );
+      }
+      return createResult(
+        'gpu-psu-minimum',
+        'pass',
+        `Fuente de ${psuWattage}W cumple con los ${gpuRecommendedPsu}W requeridos por la GPU`,
+        ['gpu', 'psu']
+      );
+    }
+
+    // PSU is below requirement - ALWAYS fail, no tolerance
+    return createResult(
+      'gpu-psu-minimum',
+      'fail',
+      `Fuente insuficiente: ${psuWattage}W. La GPU requiere mínimo ${gpuRecommendedPsu}W`,
+      ['gpu', 'psu']
     );
   },
 };
@@ -544,7 +704,33 @@ const psuPowerRule: CompatibilityRule = {
       );
     }
 
-    // Estimate power consumption
+    // IMPORTANT: If GPU specifies a recommended PSU, that value ALREADY INCLUDES
+    // the entire system (CPU, motherboard, RAM, storage, etc.)
+    // We should use that value directly, NOT sum it with CPU power
+    if (gpu?.spec.gpuRecommendedPsu) {
+      // GPU manufacturer's recommended PSU already accounts for the full system
+      const gpuRecommendedPsu = gpu.spec.gpuRecommendedPsu;
+      
+      if (psuWattage >= gpuRecommendedPsu) {
+        return createResult(
+          'psu-power',
+          'pass',
+          `Fuente de ${psuWattage}W cumple con el sistema completo según GPU (${gpuRecommendedPsu}W)`,
+          ['psu', 'cpu', 'gpu']
+        );
+      }
+      
+      // PSU is below GPU recommendation - this is already handled by other rules
+      // Just pass here to avoid duplicate failures
+      return createResult(
+        'psu-power',
+        'pass',
+        '', // Other rules (psuGpuMinimumPowerRule) will handle this
+        ['psu', 'cpu', 'gpu']
+      );
+    }
+    
+    // Only estimate if GPU doesn't specify recommended PSU
     let estimatedPower = 100; // Base system power (mobo, ram, storage, fans)
     
     if (cpu?.spec.tdp) {
@@ -553,12 +739,8 @@ const psuPowerRule: CompatibilityRule = {
       estimatedPower += 125; // Default estimate
     }
 
-    if (gpu?.spec.gpuRecommendedPsu) {
-      // GPU recommended PSU already includes overhead
-      const gpuPower = gpu.spec.gpuRecommendedPsu - 200; // Subtract base estimate
-      estimatedPower += Math.max(gpuPower, 150);
-    } else if (gpu) {
-      estimatedPower += 200; // Default GPU estimate
+    if (gpu) {
+      estimatedPower += 200; // Default GPU estimate (only when GPU doesn't specify)
     }
 
     // Add 20% headroom
@@ -714,7 +896,9 @@ export const COMPATIBILITY_RULES: CompatibilityRule[] = [
   caseMotherboardFormFactorRule,
   gpuCaseLengthRule,
   caseGpuLengthRule,
+  caseIncludedPsuGpuRule, // Validate case's included PSU against GPU
   psuGpuMinimumPowerRule,
+  gpuPsuMinimumPowerRule, // Inverse rule: validate GPU against PSU
   psuPowerRule,
   coolerCpuSocketRule,
   coolerCaseClearanceRule,

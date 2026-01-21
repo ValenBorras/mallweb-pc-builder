@@ -100,6 +100,69 @@ export function BuildSummary() {
     }
   };
 
+  // Calculate total weight of all products in the build
+  const calculateTotalWeight = (): number => {
+    let totalWeight = 0;
+    
+    for (const [categoryKey, part] of Object.entries(parts)) {
+      if (Array.isArray(part) && part.length > 0) {
+        // Multi-select categories (RAM, Storage)
+        for (const item of part) {
+          const weight = item.product.product.dimensions?.weight || 0;
+          totalWeight += weight * item.quantity;
+        }
+      } else if (part !== null && !Array.isArray(part)) {
+        // Single-select categories
+        if (part.product.id !== USE_INCLUDED_COOLER_ID) {
+          const weight = part.product.dimensions?.weight || 0;
+          totalWeight += weight;
+        }
+      }
+    }
+    
+    return totalWeight;
+  };
+
+  // Calculate shipping cost using n8n webhook
+  const calculateShippingCost = async (
+    postalCode: string,
+    totalWeight: number,
+    totalPrice: number
+  ): Promise<number> => {
+    try {
+      const response = await fetch(
+        'https://n8n.southamerica-east1-a.gcp.pathfinding.com.ar/webhook/e0d2cb32-0512-4e41-ad50-1420d9430dd8',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            codigopostal: postalCode,
+            pesoproducto: totalWeight,
+            total_carrito: totalPrice,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Error al calcular costo de envío:', response.statusText);
+        return 0; // Return 0 if shipping calculation fails
+      }
+
+      const data = await response.json();
+      
+      // El webhook puede devolver el costo en diferentes formatos
+      // Ajustar según la respuesta real del webhook
+      const shippingCost = data.costo_envio || data.shipping_cost || data.cost || 0;
+      
+      return typeof shippingCost === 'number' ? shippingCost : parseFloat(shippingCost) || 0;
+    } catch (error) {
+      console.error('Error al calcular costo de envío:', error);
+      return 0; // Return 0 if shipping calculation fails
+    }
+  };
+
   // Handle checkout with form data
   const handleCheckoutSubmit = async (formData: CheckoutFormData) => {
     setIsCheckingOut(true);
@@ -129,6 +192,18 @@ export function BuildSummary() {
             });
           }
         }
+      }
+      
+      // Calculate shipping cost
+      let shippingCost = 0;
+      if (!formData.isPickup && formData.postalCode) {
+        const totalWeight = calculateTotalWeight();
+        const totalPrice = getTotalPrice();
+        shippingCost = await calculateShippingCost(
+          formData.postalCode,
+          totalWeight,
+          totalPrice
+        );
       }
       
       // Prepare customer data from form
@@ -165,7 +240,7 @@ export function BuildSummary() {
         body: JSON.stringify({
           cartItems,
           customerData,
-          shippingAmount: '0.00', // Por ahora sin costo de envío
+          shippingAmount: shippingCost.toFixed(2),
         }),
       });
       
