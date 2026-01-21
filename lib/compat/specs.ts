@@ -735,48 +735,59 @@ function extractMaxCpuCoolerHeight(product: Product): number | undefined {
 
 /**
  * Extract if case includes a PSU and its wattage from product data
+ * IMPORTANT: Only considers PSU included if wattage is explicitly mentioned (e.g., "600w", "500W")
  */
 function extractIncludesPsu(product: Product): { includesPsu: boolean; psuWattage?: number } {
   const text = `${product.title} ${product.description}`;
   
   // Try to detect wattage in patterns like "c/Fuente 600w", "con fuente 600W", "+ Fuente 500w"
-  const wattageMatch = text.match(/(?:c\/|con|with|\+)\s*fuente\s*(\d{3,4})\s*w/i);
-  const detectedWattage = wattageMatch ? parseInt(wattageMatch[1]) : undefined;
+  // This is the KEY check - we ONLY consider PSU included if we find a wattage pattern
+  const wattagePatterns = [
+    /(?:c\/|con|with|\+|incluye|incluido)\s*(?:fuente|psu|power supply)\s*(\d{3,4})\s*w/i,
+    /(?:fuente|psu|power supply)\s*(?:de\s*)?(\d{3,4})\s*w/i,
+    /(\d{3,4})\s*w\s*(?:fuente|psu|power supply)/i,
+  ];
   
-  // Check for explicit mentions in title/description
-  // Positive patterns (includes PSU) - note: \s* allows for optional space (needed for c/Fuente)
-  if (/(incluye|incluido|include[sd]?|con|with|c\/)\s*(fuente|psu|power supply)/i.test(text)) {
-    return { includesPsu: true, psuWattage: detectedWattage };
-  }
-  if (/\b(fuente|psu|power supply)\s+(incluida?|included)/i.test(text)) {
-    return { includesPsu: true, psuWattage: detectedWattage };
-  }
-  // Common patterns like "kit con fuente", "gabinete + fuente"
-  if (/(kit|combo)\s*(con|with|c\/)\s*(fuente|psu)/i.test(text)) {
-    return { includesPsu: true, psuWattage: detectedWattage };
-  }
-  if (/gabinete\s*[\+\/]\s*fuente/i.test(text)) {
-    return { includesPsu: true, psuWattage: detectedWattage };
+  let detectedWattage: number | undefined;
+  for (const pattern of wattagePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      detectedWattage = parseInt(match[1]);
+      break;
+    }
   }
   
-  // Negative patterns (does NOT include PSU)
-  if (/\b(sin|without|no\s+incluye|not\s+included?)\s+(fuente|psu|power supply)/i.test(text)) {
+  // If no wattage is detected, the case does NOT include a PSU
+  // This is the fix: we require explicit wattage to confirm PSU inclusion
+  if (!detectedWattage) {
+    // Check negative patterns to be explicit about cases without PSU
+    if (/\b(sin|without|no\s+incluye|not\s+included?)\s+(fuente|psu|power supply)/i.test(text)) {
+      return { includesPsu: false };
+    }
+    if (/\b(fuente|psu|power supply)\s+(no\s+incluida?|not\s+included?)/i.test(text)) {
+      return { includesPsu: false };
+    }
+    
+    // Default: no wattage found = no PSU included
     return { includesPsu: false };
   }
-  if (/\b(fuente|psu|power supply)\s+(no\s+incluida?|not\s+included?)/i.test(text)) {
+  
+  // If wattage is found, verify it's in context of inclusion (not exclusion)
+  // Check for explicit NEGATIVE mentions first
+  if (/\b(sin|without|no\s+incluye|not\s+included?)\s+(?:fuente|psu|power supply)/i.test(text)) {
+    return { includesPsu: false };
+  }
+  if (/\b(?:fuente|psu|power supply)\s+(no\s+incluida?|not\s+included?)/i.test(text)) {
     return { includesPsu: false };
   }
   
-  // Check in attribute groups for "Incluye fuente" attribute
+  // Check in attribute groups for explicit "Incluye fuente" = "No"
   if (product.attributeGroups) {
     for (const group of product.attributeGroups) {
       for (const attr of group.attributes) {
         // Look for "Incluye fuente", "Include PSU", etc.
         if (/incluye|include[sd]?|con|with/i.test(attr.name) && /fuente|psu|power supply/i.test(attr.name)) {
           const value = attr.value.toLowerCase().trim();
-          if (value === 'si' || value === 'sí' || value === 'yes' || value === 'true') {
-            return { includesPsu: true, psuWattage: detectedWattage };
-          }
           if (value === 'no' || value === 'false') {
             return { includesPsu: false };
           }
@@ -785,9 +796,6 @@ function extractIncludesPsu(product: Product): { includesPsu: boolean; psuWattag
         // Also check if value contains PSU info
         if (/fuente|psu|power supply/i.test(attr.name)) {
           const value = attr.value.toLowerCase().trim();
-          if (value === 'incluida' || value === 'included' || value === 'si' || value === 'sí' || value === 'yes') {
-            return { includesPsu: true, psuWattage: detectedWattage };
-          }
           if (value === 'no incluida' || value === 'not included' || value === 'no' || value === 'sin fuente') {
             return { includesPsu: false };
           }
@@ -796,8 +804,8 @@ function extractIncludesPsu(product: Product): { includesPsu: boolean; psuWattag
     }
   }
   
-  // Default: assume cases do NOT include a PSU unless explicitly stated
-  return { includesPsu: false };
+  // If wattage is detected AND no negative patterns found, PSU is included
+  return { includesPsu: true, psuWattage: detectedWattage };
 }
 
 /**

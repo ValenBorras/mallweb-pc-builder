@@ -115,6 +115,30 @@ export const useBuildStore = create<BuildState>()(
           return;
         }
         
+        // Special handling for cases WITHOUT included PSU
+        if (category === 'case' && !productWithSpec.spec.includesPsu) {
+          const currentPsu = get().parts.psu;
+          
+          // If the current PSU is the "use included PSU" option, remove it
+          // because the new case doesn't have an included PSU
+          if (currentPsu && !Array.isArray(currentPsu) && currentPsu.product.id === USE_INCLUDED_PSU_ID) {
+            // Set the case and clear the PSU
+            set((state) => ({
+              parts: {
+                ...state.parts,
+                [category]: productWithSpec,
+                psu: null,
+              },
+            }));
+            
+            if (typeof window !== 'undefined') {
+              alert('El nuevo gabinete no incluye fuente de poder. Debes seleccionar una fuente por separado.');
+            }
+            
+            return;
+          }
+        }
+        
         // Special handling for PSU: check if case has included PSU
         if (category === 'psu') {
           const currentCase = get().parts.case;

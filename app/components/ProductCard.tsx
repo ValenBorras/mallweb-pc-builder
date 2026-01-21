@@ -174,7 +174,44 @@ export function ProductCard({
 
             {/* Actions */}
             <div className="flex gap-2 mt-2">
-              {isSelected ? (
+              {isSelected && isMultiSelect && onIncrement && onDecrement ? (
+                // Multi-select with quantity controls
+                <>
+                  <div className="flex items-center gap-1.5 bg-gray-100 rounded-lg px-2">
+                    <button
+                      onClick={onDecrement}
+                      className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors"
+                      title="Decrementar"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M20 12H4" />
+                      </svg>
+                    </button>
+                    <span className="text-xs font-semibold text-gray-900 min-w-[2ch] text-center">
+                      {quantity}
+                    </span>
+                    <button
+                      onClick={onIncrement}
+                      disabled={product.stock <= quantity || ramLimitReached}
+                      className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={ramLimitReached ? `Máximo ${maxRamSlots} módulos (slots de la motherboard)` : "Incrementar"}
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </button>
+                  </div>
+                  <button
+                    onClick={onRemove}
+                    className="px-3 py-2 rounded-lg text-xs font-medium
+                      bg-gray-200 text-gray-700 hover:bg-gray-300
+                      transition-colors"
+                  >
+                    Quitar
+                  </button>
+                </>
+              ) : isSelected ? (
+                // Single-select remove button
                 <button
                   onClick={onRemove}
                   className="flex-1 py-2 px-3 rounded-lg text-xs font-medium
@@ -184,6 +221,7 @@ export function ProductCard({
                   Quitar
                 </button>
               ) : (
+                // Add button
                 <button
                   onClick={() => onSelect(product)}
                   disabled={product.stock === 0 || (compatibility && !compatibility.allowed) || ramLimitReached}
