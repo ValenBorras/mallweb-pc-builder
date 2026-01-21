@@ -187,6 +187,7 @@ export function clearSearchCache(): void {
  * This function is meant to be called from the server-side only
  */
 export function getMallwebApi() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Configuration, DefaultApi } = require('@/app/api');
   
   const DEFAULT_LANGUAGE = 'es';

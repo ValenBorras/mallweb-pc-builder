@@ -115,6 +115,7 @@ function normalizeCurrency(currency: string): string {
  * Normalize a Mall Web item to our internal Product type
  * Handles both snake_case (old API) and camelCase (new API) formats
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeItem(item: any, includeRaw = false): Product {
   // Handle both camelCase and snake_case
   const sourceId = item.sourceId || item.source_id;
@@ -141,7 +142,7 @@ export function normalizeItem(item: any, includeRaw = false): Product {
     stock: offer?.stock ?? 0,
     imageUrl: getBestImageUrl(item),
     images: getAllImageUrls(item),
-    categories: item.category.map((cat: any) => ({
+    categories: item.category.map((cat: { id: string; name: string }) => ({
       id: cat.id,
       name: cat.name,
     })),
@@ -163,9 +164,9 @@ export function normalizeItem(item: any, includeRaw = false): Product {
       votes: item.rating?.votes ?? 0,
       value: item.rating?.value ?? 0,
     },
-    attributeGroups: attributeGroups?.map((group: any) => ({
+    attributeGroups: attributeGroups?.map((group: { name: string; attributes: Array<{ name: string; value: string }> }) => ({
       name: group.name,
-      attributes: group.attributes.map((attr: any) => ({
+      attributes: group.attributes.map((attr: { name: string; value: string }) => ({
         name: attr.name,
         value: attr.value,
       })),
