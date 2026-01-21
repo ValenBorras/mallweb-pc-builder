@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { useBuildStore, useTotalQuantity, useMaxRamSlots } from '@/store/buildStore';
-import { getCategoriesArray } from '@/lib/catalog/categories';
+import { useBuildStore, useTotalQuantity, useMaxRamSlots, USE_INCLUDED_COOLER_ID } from '@/store/buildStore';
+import { getCategoriesArray, getRequiredCategories, isGpuRequired, isCoolerRequired } from '@/lib/catalog/categories';
 import { getCategoryIcon } from '@/lib/catalog/icons';
 import type { ProductWithQuantity } from '@/store/buildStore';
+import { CheckoutModal, type CheckoutFormData } from './CheckoutModal';
 
 export function BuildSummary() {
   const [isClient, setIsClient] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  
   const parts = useBuildStore((state) => state.parts);
   const getTotalPrice = useBuildStore((state) => state.getTotalPrice);
   const getPartCount = useBuildStore((state) => state.getPartCount);
@@ -46,44 +51,154 @@ export function BuildSummary() {
   const totalRamQuantity = useTotalQuantity('ram');
   const maxRamSlots = useMaxRamSlots();
 
-  return (
-    <div className="bg-white border border-gray-300 rounded-2xl overflow-hidden">
-      {/* Header */}
-      <div className="p-5 border-b border-gray-300 bg-gray-800">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white flex items-center gap-3">
-            <Image
-              src="/241_12-10-2022-02-10-45-mallweb.png"
-              alt="Mall Web Logo"
-              width={60}
-              height={24}
-              className="h-6 w-auto object-contain"
-            />
-            Tu Build
-          </h2>
-          {isClient && partCount > 0 && (
-            <button
-              onClick={clearBuild}
-              className="text-xs text-white hover:bg-red-700 transition-colors px-2 py-1 bg-red-600 font-semibold rounded-md"
-            >
-              Limpiar todo
-            </button>
-          )}
-        </div>
-        {isClient && (
-          <p className="text-sm text-white mt-2">
-            {partCount} componente{partCount !== 1 ? 's' : ''} seleccionado{partCount !== 1 ? 's' : ''}
-          </p>
-        )}
-      </div>
+  // Check if all required components are present
+  const checkRequiredComponents = (): { complete: boolean; missing: string[] } => {
+    const missing: string[] = [];
+    const requiredCategories = getRequiredCategories();
+    
+    for (const category of requiredCategories) {
+      const part = parts[category.key];
+      const hasPart = Array.isArray(part) ? part.length > 0 : part !== null;
+      
+      if (!hasPart) {
+        missing.push(category.shortName);
+      }
+    }
+    
+    // Check GPU requirement based on CPU
+    const cpuPart = parts.cpu;
+    const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
+    if (isGpuRequired(cpuHasGraphics)) {
+      const gpuPart = parts.gpu;
+      const hasGpu = Array.isArray(gpuPart) ? gpuPart.length > 0 : gpuPart !== null;
+      if (!hasGpu) {
+        missing.push('GPU');
+      }
+    }
+    
+    // Check Cooler requirement based on CPU
+    const cpuIncludesCooler = !Array.isArray(cpuPart) && cpuPart?.spec.includesCooler;
+    if (isCoolerRequired(cpuIncludesCooler)) {
+      const coolerPart = parts.cooler;
+      const hasCooler = Array.isArray(coolerPart) ? coolerPart.length > 0 : coolerPart !== null;
+      if (!hasCooler) {
+        missing.push('Cooler');
+      }
+    }
+    
+    return { complete: missing.length === 0, missing };
+  };
 
+  const requiredComponentsStatus = checkRequiredComponents();
+  const canCheckout = requiredComponentsStatus.complete && summary.isCompatible;
+
+  // Open checkout modal
+  const handleOpenCheckout = () => {
+    if (canCheckout) {
+      setCheckoutError(null);
+      setShowCheckoutModal(true);
+    }
+  };
+
+  // Handle checkout with form data
+  const handleCheckoutSubmit = async (formData: CheckoutFormData) => {
+    setIsCheckingOut(true);
+    setCheckoutError(null);
+    
+    try {
+      // Prepare cart items
+      const cartItems: Array<{ productId: string; quantity: number }> = [];
+      
+      // Iterate through all parts
+      for (const [categoryKey, part] of Object.entries(parts)) {
+        if (Array.isArray(part) && part.length > 0) {
+          // Multi-select categories (RAM, Storage)
+          for (const item of part) {
+            cartItems.push({
+              productId: item.product.product.id,
+              quantity: item.quantity,
+            });
+          }
+        } else if (part !== null && !Array.isArray(part)) {
+          // Single-select categories
+          // Skip the "use included cooler" virtual product
+          if (part.product.id !== USE_INCLUDED_COOLER_ID) {
+            cartItems.push({
+              productId: part.product.id,
+              quantity: 1,
+            });
+          }
+        }
+      }
+      
+      // Prepare customer data from form
+      const customerData = {
+        customerType: formData.customerType,
+        email: formData.email,
+        phoneNumber: formData.phoneNumber,
+        isPickup: formData.isPickup,
+        ...(formData.customerType === 'person' ? {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          dni: formData.dni,
+        } : {
+          legalName: formData.legalName,
+          cuit: formData.cuit,
+        }),
+        ...(!formData.isPickup ? {
+          streetName: formData.streetName,
+          streetNumber: formData.streetNumber,
+          floor: formData.floor,
+          department: formData.department,
+          city: formData.city,
+          province: formData.province,
+          postalCode: formData.postalCode,
+        } : {}),
+      };
+      
+      // Call checkout API
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cartItems,
+          customerData,
+          shippingAmount: '0.00', // Por ahora sin costo de envío
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error al crear el checkout');
+      }
+      
+      const data = await response.json();
+      
+      // Redirect to checkout
+      if (data.checkoutLink) {
+        window.location.href = data.checkoutLink;
+      } else {
+        throw new Error('No se recibió el link de checkout');
+      }
+      
+    } catch (error) {
+      console.error('Checkout error:', error);
+      setCheckoutError(error instanceof Error ? error.message : 'Error desconocido');
+      setIsCheckingOut(false);
+    }
+  };
+
+  return (
+    <div className="bg-white overflow-hidden h-full flex flex-col">
       {/* Parts list */}
       {isClient && (
-        <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
+        <div className="p-3 md:p-4 space-y-2 md:space-y-3 flex-1 overflow-y-auto">
           {selectedParts.length === 0 ? (
-          <div className="text-center py-10">
-            <div className="text-5xl mb-4">🔧</div>
-            <p className="text-gray-600 text-sm">
+          <div className="text-center py-8 md:py-10">
+            <div className="text-4xl md:text-5xl mb-3 md:mb-4">🔧</div>
+            <p className="text-gray-600 text-xs md:text-sm">
               Empezá eligiendo un componente
             </p>
           </div>
@@ -104,12 +219,12 @@ export function BuildSummary() {
                   {part.map((item: ProductWithQuantity, index: number) => (
                     <div
                       key={`${category.key}-${item.product.product.id}`}
-                      className="p-3 rounded-xl bg-gray-50 border border-gray-200"
+                      className="p-2 md:p-3 rounded-lg md:rounded-xl bg-gray-50 border border-gray-200"
                     >
                       {/* Top row: Image + Title */}
-                      <div className="flex items-start gap-3 mb-2">
+                      <div className="flex items-start gap-2 md:gap-3 mb-2">
                         {/* Product Image */}
-                        <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                        <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
                           {item.product.product.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -206,12 +321,12 @@ export function BuildSummary() {
               return (
                 <div
                   key={category.key}
-                  className="p-3 rounded-xl bg-gray-50 border border-gray-200"
+                  className="p-2 md:p-3 rounded-lg md:rounded-xl bg-gray-50 border border-gray-200"
                 >
                   {/* Top row: Image + Title */}
-                  <div className="flex items-start gap-3 mb-2">
+                  <div className="flex items-start gap-2 md:gap-3 mb-2">
                     {/* Product Image */}
-                    <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
                       {part.product.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -271,14 +386,14 @@ export function BuildSummary() {
 
       {/* GPU requirement info */}
       {isClient && cpuPart && !Array.isArray(cpuPart) && (
-        <div className="px-4 pb-2">
+        <div className="px-3 md:px-4 pb-2">
           {cpuHasGraphics && !hasGpu && (
-            <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-700 leading-relaxed">
+            <div className="p-2 md:p-3 rounded-lg bg-blue-50 border border-blue-200 text-[10px] md:text-xs text-blue-700 leading-relaxed">
               💡 Tu CPU tiene gráficos integrados. La GPU es opcional.
             </div>
           )}
           {!cpuHasGraphics && !hasGpu && (
-            <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-700 leading-relaxed">
+            <div className="p-2 md:p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-[10px] md:text-xs text-yellow-700 leading-relaxed">
               ⚠️ Tu CPU no tiene gráficos integrados. Necesitás una GPU dedicada.
             </div>
           )}
@@ -287,14 +402,14 @@ export function BuildSummary() {
 
       {/* Compatibility summary */}
       {isClient && partCount > 1 && (summary.warnings.length > 0 || summary.failures.length > 0) && (
-        <div className="px-4 pb-4 space-y-2">
+        <div className="px-3 md:px-4 pb-3 md:pb-4 space-y-2">
           {summary.failures.map((failure, i) => (
-            <div key={i} className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 leading-relaxed">
+            <div key={i} className="p-2 md:p-3 rounded-lg bg-red-50 border border-red-200 text-[10px] md:text-xs text-red-700 leading-relaxed">
               ❌ {failure}
             </div>
           ))}
           {summary.warnings.map((warning, i) => (
-            <div key={i} className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-700 leading-relaxed">
+            <div key={i} className="p-2 md:p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-[10px] md:text-xs text-yellow-700 leading-relaxed">
               ⚠️ {warning}
             </div>
           ))}
@@ -303,20 +418,20 @@ export function BuildSummary() {
 
       {/* Total */}
       {isClient && (
-        <div className="p-5 border-t border-gray-300 bg-gray-50">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-gray-600">Total</span>
+        <div className="p-3 md:p-4 lg:p-5 border-t border-gray-300 bg-gray-50 shrink-0">
+          <div className="flex items-center justify-between mb-3 md:mb-4">
+            <span className="text-sm md:text-base text-gray-600 font-medium">Total</span>
             <div className="text-right">
-              <div className="text-2xl font-bold text-gray-900">
+              <div className="text-xl md:text-2xl font-bold text-gray-900">
                 ${totalPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-xs text-gray-500 mt-1">USD</div>
+              <div className="text-xs text-gray-500 mt-0.5 md:mt-1">ARS</div>
             </div>
           </div>
 
           {/* Build status */}
           <div className={`
-            p-4 rounded-xl text-center text-sm font-medium
+            p-3 md:p-4 rounded-lg md:rounded-xl text-center text-xs md:text-sm font-medium mb-3 md:mb-4
             ${summary.isComplete && summary.isCompatible 
               ? 'bg-green-50 text-green-700 border border-green-300' 
               : !summary.isCompatible 
@@ -332,8 +447,66 @@ export function BuildSummary() {
               <>Faltan componentes requeridos</>
             )}
           </div>
+
+          {/* Missing components warning */}
+          {!requiredComponentsStatus.complete && (
+            <div className="mb-3 md:mb-4 p-2 md:p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+              <p className="text-[10px] md:text-xs text-yellow-700 font-medium mb-1">
+                Componentes faltantes:
+              </p>
+              <p className="text-[10px] md:text-xs text-yellow-600">
+                {requiredComponentsStatus.missing.join(', ')}
+              </p>
+            </div>
+          )}
+
+          {/* Checkout error */}
+          {checkoutError && (
+            <div className="mb-3 md:mb-4 p-2 md:p-3 rounded-lg bg-red-50 border border-red-200">
+              <p className="text-[10px] md:text-xs text-red-700 font-medium mb-1">
+                Error al procesar checkout:
+              </p>
+              <p className="text-[10px] md:text-xs text-red-600">
+                {checkoutError}
+              </p>
+            </div>
+          )}
+
+          {/* Checkout button */}
+          <button
+            onClick={handleOpenCheckout}
+            disabled={!canCheckout || partCount === 0}
+            className={`
+              w-full py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-xl font-bold text-sm md:text-base transition-all duration-200
+              ${canCheckout
+                ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 transform hover:scale-[1.02]'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }
+            `}
+          >
+            {partCount === 0 ? (
+              'Agregá componentes'
+            ) : !canCheckout ? (
+              'Completá tu Build'
+            ) : (
+              '🛒 Finalizar Compra'
+            )}
+          </button>
+
+          <p className="text-[10px] md:text-xs text-gray-500 text-center mt-2 md:mt-3">
+            Completá tus datos para continuar
+          </p>
         </div>
       )}
+
+      {/* Checkout Modal */}
+      <CheckoutModal
+        isOpen={showCheckoutModal}
+        onClose={() => !isCheckingOut && setShowCheckoutModal(false)}
+        onSubmit={handleCheckoutSubmit}
+        isProcessing={isCheckingOut}
+        totalAmount={totalPrice}
+      />
     </div>
   );
 }

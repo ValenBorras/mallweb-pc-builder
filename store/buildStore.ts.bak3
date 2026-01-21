@@ -1,0 +1,431 @@
+/**
+ * Build Store
+ * Zustand store for managing the PC build state
+ */
+
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { CategoryKey } from '../lib/catalog/categories';
+import type { Product } from '../lib/mallweb/normalize';
+import type { ProductWithSpec, PCBuild } from '../lib/compat/types';
+import { createProductWithSpec, getBuildCompatibilitySummary } from '../lib/compat/engine';
+
+// Categories that allow multiple selections
+const MULTI_SELECT_CATEGORIES: CategoryKey[] = ['ram', 'storage'];
+
+// Special ID for "use included cooler" option
+export const USE_INCLUDED_COOLER_ID = '__use_included_cooler__';
+
+// Helper type for items with quantity (used in multi-select categories)
+export interface ProductWithQuantity {
+  product: ProductWithSpec;
+  quantity: number;
+}
+
+// Helper type for parts that can be single or multiple
+type PartValue = ProductWithSpec | ProductWithQuantity[] | null;
+type PartsRecord = Record<CategoryKey, PartValue>;
+
+interface BuildState {
+  // The current build (parts selected)
+  // RAM and Storage can have multiple items (arrays), others are single
+  parts: PartsRecord;
+  
+  // Currently active category in the builder
+  activeCategory: CategoryKey;
+  
+  // Actions
+  setPart: (category: CategoryKey, product: Product) => void;
+  addPart: (category: CategoryKey, product: Product) => void;
+  removePart: (category: CategoryKey, productId?: string) => void;
+  incrementQuantity: (category: CategoryKey, productId: string) => void;
+  decrementQuantity: (category: CategoryKey, productId: string) => void;
+  clearBuild: () => void;
+  setActiveCategory: (category: CategoryKey) => void;
+  
+  // Computed helpers (accessed as functions to avoid stale closures)
+  getBuild: () => PCBuild;
+  getTotalPrice: () => number;
+  getPartCount: () => number;
+  getCurrency: () => string;
+
+  getCompatibilitySummary: () => ReturnType<typeof getBuildCompatibilitySummary>;
+}
+
+const INITIAL_PARTS: PartsRecord = {
+  cpu: null,
+  motherboard: null,
+  ram: [], // Array for multiple RAM sticks
+  gpu: null,
+  storage: [], // Array for multiple storage devices
+  psu: null,
+  case: null,
+  cooler: null,
+  monitor: null,
+  mouse: null,
+  headphones: null,
+  keyboard: null,
+  fans: null,
+  peripherals: null,
+};
+
+export const useBuildStore = create<BuildState>()(
+  persist(
+    (set, get) => ({
+      parts: { ...INITIAL_PARTS },
+      activeCategory: 'cpu',
+
+      setPart: (category, product) => {
+        const productWithSpec = createProductWithSpec(product, category);
+        
+        // For multi-select categories, replace the array with a single item with quantity 1
+        if (MULTI_SELECT_CATEGORIES.includes(category)) {
+          set((state) => ({
+            parts: {
+              ...state.parts,
+              [category]: [{ product: productWithSpec, quantity: 1 }],
+            },
+          }));
+        } else {
+          set((state) => ({
+            parts: {
+              ...state.parts,
+              [category]: productWithSpec,
+            },
+          }));
+        }
+      },
+
+      addPart: (category, product) => {
+        const productWithSpec = createProductWithSpec(product, category);
+        
+        if (MULTI_SELECT_CATEGORIES.includes(category)) {
+          set((state) => {
+            const currentParts = state.parts[category];
+            const partsArray = Array.isArray(currentParts) ? currentParts : [];
+            
+            // Check if product already exists
+            const existingIndex = partsArray.findIndex(p => p.product.product.id === product.id);
+            
+            if (existingIndex !== -1) {
+              // Product exists, increment quantity
+              const updatedParts = [...partsArray];
+              updatedParts[existingIndex] = {
+                ...updatedParts[existingIndex],
+                quantity: updatedParts[existingIndex].quantity + 1,
+              };
+              
+              return {
+                parts: {
+                  ...state.parts,
+                  [category]: updatedParts,
+                },
+              };
+            }
+            
+            // Product doesn't exist, add it with quantity 1
+            return {
+              parts: {
+                ...state.parts,
+                [category]: [...partsArray, { product: productWithSpec, quantity: 1 }],
+              },
+            };
+          });
+        } else {
+          // For single-select categories, just set the part
+          set((state) => ({
+            parts: {
+              ...state.parts,
+              [category]: productWithSpec,
+            },
+          }));
+        }
+      },
+
+      removePart: (category, productId) => {
+        if (MULTI_SELECT_CATEGORIES.includes(category) && productId) {
+          // Remove specific item from array
+          set((state) => {
+            const currentParts = state.parts[category];
+            if (Array.isArray(currentParts)) {
+              const filtered = currentParts.filter(p => p.product.product.id !== productId);
+              return {
+                parts: {
+                  ...state.parts,
+                  [category]: filtered.length > 0 ? filtered : [],
+                },
+              };
+            }
+            return state;
+          });
+        } else {
+          // Remove entire category
+          set((state) => ({
+            parts: {
+              ...state.parts,
+              [category]: MULTI_SELECT_CATEGORIES.includes(category) ? [] : null,
+            },
+          }));
+        }
+      },
+
+      incrementQuantity: (category, productId) => {
+        if (!MULTI_SELECT_CATEGORIES.includes(category)) return;
+        
+        set((state) => {
+          const currentParts = state.parts[category];
+          if (!Array.isArray(currentParts)) return state;
+          
+          const updatedParts = currentParts.map(item => 
+            item.product.product.id === productId
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          );
+          
+          return {
+            parts: {
+              ...state.parts,
+              [category]: updatedParts,
+            },
+          };
+        });
+      },
+
+      decrementQuantity: (category, productId) => {
+        if (!MULTI_SELECT_CATEGORIES.includes(category)) return;
+        
+        set((state) => {
+          const currentParts = state.parts[category];
+          if (!Array.isArray(currentParts)) return state;
+          
+          const updatedParts = currentParts
+            .map(item => 
+              item.product.product.id === productId
+                ? { ...item, quantity: Math.max(1, item.quantity - 1) }
+                : item
+            )
+            .filter(item => item.quantity > 0);
+          
+          return {
+            parts: {
+              ...state.parts,
+              [category]: updatedParts.length > 0 ? updatedParts : [],
+            },
+          };
+        });
+      },
+
+      clearBuild: () => {
+        set({ parts: { ...INITIAL_PARTS } });
+      },
+
+      setActiveCategory: (category) => {
+        set({ activeCategory: category });
+      },
+
+      getBuild: () => {
+        const { parts } = get();
+        const build: PCBuild = new Map();
+        
+        for (const [key, value] of Object.entries(parts)) {
+          const categoryKey = key as CategoryKey;
+          
+          if (MULTI_SELECT_CATEGORIES.includes(categoryKey)) {
+            // For multi-select categories, only add if array has items
+            if (Array.isArray(value) && value.length > 0) {
+              // For compatibility checks, use the first item's product
+              build.set(categoryKey, value[0].product);
+            }
+          } else if (value !== null && !Array.isArray(value)) {
+            build.set(categoryKey, value);
+          }
+        }
+        
+        return build;
+      },
+
+      getTotalPrice: () => {
+        const { parts } = get();
+        let total = 0;
+        
+        for (const part of Object.values(parts)) {
+          if (Array.isArray(part)) {
+            // Sum all items in array, multiplied by quantity
+            total += part.reduce((sum, item) => sum + (item.product.product.price * item.quantity), 0);
+          } else if (part !== null) {
+            total += part.product.price;
+          }
+        }
+        
+        return total;
+
+      getCurrency: () => {
+        const { parts } = get();
+        
+        // Get currency from first available product
+        for (const part of Object.values(parts)) {
+          if (Array.isArray(part) && part.length > 0) {
+            return part[0].product.product.currency || 'ARS';
+          } else if (part !== null) {
+            return part.product.currency || 'ARS';
+          }
+        }
+        
+        // Default to ARS if no parts selected
+        return 'ARS';
+      },
+      },
+
+      getPartCount: () => {
+        const { parts } = get();
+        let count = 0;
+        
+        for (const part of Object.values(parts)) {
+          if (Array.isArray(part)) {
+            // Count total units (items * quantity)
+            count += part.reduce((sum, item) => sum + item.quantity, 0);
+          } else if (part !== null) {
+            count++;
+          }
+        }
+        
+        return count;
+      },
+
+      getCompatibilitySummary: () => {
+        const build = get().getBuild();
+        return getBuildCompatibilitySummary(build);
+      },
+    }),
+    {
+      name: 'pc-build-storage',
+      partialize: (state) => ({
+        parts: state.parts,
+        activeCategory: state.activeCategory,
+      }),
+    }
+  )
+);
+
+/**
+ * Hook to get a specific part (returns single item or array)
+ */
+export function usePart(category: CategoryKey) {
+  return useBuildStore((state) => state.parts[category]);
+}
+
+/**
+ * Hook to check if a category has a part selected
+ */
+export function useHasPart(category: CategoryKey) {
+  return useBuildStore((state) => {
+    const part = state.parts[category];
+    if (Array.isArray(part)) {
+      return part.length > 0;
+    }
+    return part !== null;
+  });
+}
+
+/**
+ * Hook to check if a specific product is selected in a category
+ */
+export function useIsProductSelected(category: CategoryKey, productId: string) {
+  return useBuildStore((state) => {
+    const part = state.parts[category];
+    if (Array.isArray(part)) {
+      return part.some(p => p.product.product.id === productId);
+    }
+    return part?.product.id === productId;
+  });
+}
+
+/**
+ * Hook to get the quantity of a specific product in a category
+ */
+export function useProductQuantity(category: CategoryKey, productId: string): number {
+  return useBuildStore((state) => {
+    const part = state.parts[category];
+    if (Array.isArray(part)) {
+      const item = part.find(p => p.product.product.id === productId);
+      return item?.quantity ?? 0;
+    }
+    return 0;
+  });
+}
+
+/**
+ * Hook to get the total quantity of items in a multi-select category
+ */
+export function useTotalQuantity(category: CategoryKey): number {
+  return useBuildStore((state) => {
+    const part = state.parts[category];
+    if (Array.isArray(part)) {
+      return part.reduce((sum, item) => sum + item.quantity, 0);
+    }
+    return 0;
+  });
+}
+
+/**
+ * Hook to get the maximum RAM slots available from the selected motherboard
+ */
+export function useMaxRamSlots(): number {
+  return useBuildStore((state) => {
+    const motherboard = state.parts.motherboard;
+    if (motherboard && !Array.isArray(motherboard)) {
+      return motherboard.spec.memorySlots ?? 4; // Default to 4 if not specified
+    }
+    return 4; // Default to 4 slots if no motherboard selected
+  });
+}
+
+/**
+ * Hook to check if the selected CPU includes a cooler
+ */
+export function useCpuIncludesCooler(): boolean {
+  return useBuildStore((state) => {
+    const cpu = state.parts.cpu;
+    if (cpu && !Array.isArray(cpu)) {
+      return cpu.spec.includesCooler ?? false;
+    }
+    return false;
+  });
+}
+
+/**
+ * Hook to check if "use included cooler" option is selected
+ */
+export function useIsUsingIncludedCooler(): boolean {
+  return useBuildStore((state) => {
+    const cooler = state.parts.cooler;
+    if (cooler && !Array.isArray(cooler)) {
+      return cooler.product.id === USE_INCLUDED_COOLER_ID;
+    }
+    return false;
+  });
+}/**
+ * Create a dummy product representing "use included cooler"
+ */
+export function createIncludedCoolerProduct(): Product {
+  return {
+    id: USE_INCLUDED_COOLER_ID,
+    title: 'Usar cooler incluido con CPU',
+    description: 'Utilizar el cooler que viene incluido con el procesador',
+    brand: '',
+    price: 0,
+    currency: 'USD',
+    stock: 999,
+    imageUrl: 'COOLER_ICON',
+    images: [],
+    categories: [],
+    identifiers: {
+      sku: USE_INCLUDED_COOLER_ID,
+    },
+    rating: {
+      votes: 0,
+      value: 0,
+    },
+    attributeGroups: [],
+  };
+}

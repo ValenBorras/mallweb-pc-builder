@@ -44,17 +44,17 @@ export function ProductList({
   // Loading state
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            className="rounded-xl border border-gray-300 bg-white p-5 animate-pulse"
+            className="rounded-xl border border-gray-300 bg-white p-4 md:p-5 animate-pulse"
           >
-            <div className="aspect-square bg-gray-200 rounded-lg mb-5" />
+            <div className="aspect-square bg-gray-200 rounded-lg mb-4" />
             <div className="h-3 bg-gray-200 rounded w-1/4 mb-3" />
             <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-5" />
-            <div className="h-6 bg-gray-200 rounded w-1/3 mb-5" />
+            <div className="h-4 bg-gray-200 rounded w-1/2 mb-4" />
+            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
             <div className="h-11 bg-gray-200 rounded" />
           </div>
         ))}
@@ -96,7 +96,7 @@ export function ProductList({
       </div>
 
       {/* Products grid - Desktop: grid, Mobile: stacked */}
-      <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="hidden md:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
         {products.map(({ product, compatibility }) => (
           <ProductCard
             key={product.id}
@@ -114,7 +114,7 @@ export function ProductList({
       </div>
 
       {/* Products list - Mobile only */}
-      <div className="lg:hidden flex flex-col gap-3">
+      <div className="md:hidden flex flex-col gap-3">
         {products.map(({ product, compatibility }) => (
           <ProductCard
             key={product.id}
@@ -134,20 +134,20 @@ export function ProductList({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-10">
+        <div className="flex items-center justify-center gap-2 md:gap-3 mt-8 mb-4">
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="p-3 rounded-lg bg-white border border-gray-300 text-gray-600
+            className="p-2 md:p-3 rounded-lg bg-white border border-gray-300 text-gray-600
               hover:bg-red-50 hover:text-red-600 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed
               transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               let pageNum: number;
               if (totalPages <= 5) {
@@ -164,7 +164,7 @@ export function ProductList({
                 <button
                   key={pageNum}
                   onClick={() => onPageChange(pageNum)}
-                  className={`w-11 h-11 rounded-lg text-sm font-medium transition-colors
+                  className={`w-9 h-9 md:w-11 md:h-11 rounded-lg text-xs md:text-sm font-medium transition-colors
                     ${currentPage === pageNum
                       ? 'bg-red-600 text-white'
                       : 'bg-white border border-gray-300 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-300'
@@ -180,11 +180,11 @@ export function ProductList({
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="p-3 rounded-lg bg-white border border-gray-300 text-gray-600
+            className="p-2 md:p-3 rounded-lg bg-white border border-gray-300 text-gray-600
               hover:bg-red-50 hover:text-red-600 hover:border-red-300 disabled:opacity-50 disabled:cursor-not-allowed
               transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>

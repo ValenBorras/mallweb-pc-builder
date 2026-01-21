@@ -47,6 +47,7 @@ interface BuildState {
   getBuild: () => PCBuild;
   getTotalPrice: () => number;
   getPartCount: () => number;
+
   getCompatibilitySummary: () => ReturnType<typeof getBuildCompatibilitySummary>;
 }
 
@@ -258,6 +259,9 @@ export const useBuildStore = create<BuildState>()(
         return total;
       },
 
+
+
+
       getPartCount: () => {
         const { parts } = get();
         let count = 0;
@@ -373,9 +377,7 @@ export function useCpuIncludesCooler(): boolean {
     }
     return false;
   });
-}
-
-/**
+}/**
  * Hook to check if "use included cooler" option is selected
  */
 export function useIsUsingIncludedCooler(): boolean {
@@ -386,9 +388,7 @@ export function useIsUsingIncludedCooler(): boolean {
     }
     return false;
   });
-}
-
-/**
+}/**
  * Create a dummy product representing "use included cooler"
  */
 export function createIncludedCoolerProduct(): Product {

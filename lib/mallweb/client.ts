@@ -5,7 +5,7 @@
 
 import type { MallWebSearchRequest, MallWebSearchResponse } from './types';
 
-const API_URL = 'https://www.gestionresellers.com.ar/api/extranet/item/search';
+const API_BASE_URL = 'https://checkout.gestionresellers.com.ar/api';
 const DEFAULT_TIMEOUT = 10000; // 10 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
@@ -77,7 +77,7 @@ async function fetchWithTimeout(
 }
 
 /**
- * Search products in the Mall Web catalog
+ * Search products in the Mall Web catalog using the unified API
  * This function is meant to be called from the server-side only
  */
 export async function searchProducts(
@@ -90,69 +90,71 @@ export async function searchProducts(
   if (cachedResult) {
     return cachedResult;
   }
-
-  const authHeader = 'Basic ' + Buffer.from(`${apiKey}:`).toString('base64');
   
   let lastError: Error | null = null;
   
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const response = await fetchWithTimeout(
-        API_URL,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader,
-          },
-          body: JSON.stringify({
-            keywords: request.keywords,
-            page: request.page ?? 1,
-            results_per_page: request.results_per_page ?? 20,
-          }),
-        },
-        DEFAULT_TIMEOUT
-      );
+      // Use the unified API (same as checkout)
+      const api = getMallwebApi();
+      
+      const response = await api.viarapidaItemSearch({
+        request: {
+          keywords: request.keywords,
+          page: request.page ?? 1,
+          resultsPerPage: request.results_per_page ?? 20,
+          fqs: [{ key: 'inStock', value: '1' }],
+        }
+      });
 
-      if (response.ok) {
-        const data: MallWebSearchResponse = await response.json();
-        setCachedResult(cacheKey, data);
-        return data;
-      }
+      // Normalize the response to match our expected format
+      const normalizedResponse: MallWebSearchResponse = {
+        current_page: response.page ?? 1,
+        total_pages: response.totalPages ?? 1,
+        total_items: response.totalItems ?? 0,
+        items: response.items || [],
+        request: request,
+      };
+      
+      setCachedResult(cacheKey, normalizedResponse);
+      return normalizedResponse;
 
-      // Handle specific error codes
-      if (response.status === 400) {
-        throw new MallWebApiError(
-          'Invalid search parameters',
-          400,
-          false
-        );
-      }
-
-      if (response.status === 401) {
-        throw new MallWebApiError(
-          'Invalid API key - authentication failed',
-          401,
-          false
-        );
-      }
-
-      if (response.status >= 500) {
-        throw new MallWebApiError(
-          `Server error: ${response.status}`,
-          response.status,
-          true
-        );
-      }
-
-      throw new MallWebApiError(
-        `Unexpected response: ${response.status}`,
-        response.status,
-        false
-      );
     } catch (error) {
       lastError = error as Error;
       
+      // Handle API errors
+      if (error && typeof error === 'object' && 'response' in error) {
+        const apiError = error as { response?: Response };
+        
+        if (apiError.response) {
+          const status = apiError.response.status;
+          
+          if (status === 400) {
+            throw new MallWebApiError(
+              'Invalid search parameters',
+              400,
+              false
+            );
+          }
+          
+          if (status === 401) {
+            throw new MallWebApiError(
+              'Invalid API key - authentication failed',
+              401,
+              false
+            );
+          }
+          
+          if (status >= 500) {
+            throw new MallWebApiError(
+              `Server error: ${status}`,
+              status,
+              true
+            );
+          }
+        }
+      }
+
       // Don't retry on non-retryable errors
       if (error instanceof MallWebApiError && !error.isRetryable) {
         throw error;
@@ -180,3 +182,27 @@ export function clearSearchCache(): void {
   searchCache.clear();
 }
 
+/**
+ * Get configured API client for Mallweb checkout
+ * This function is meant to be called from the server-side only
+ */
+export function getMallwebApi() {
+  const { Configuration, DefaultApi } = require('@/app/api');
+  
+  const DEFAULT_LANGUAGE = 'es';
+  const API_BASE_URL = process.env.GITECOMMERCEMCP_API_BASE_URL || 'https://checkout.gestionresellers.com.ar/api';
+  const apiKey = process.env.CHECKOUT_API_KEY || '';
+  
+  const extraHeaders = {
+    'Accept-Language': DEFAULT_LANGUAGE,
+    ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+  };
+  
+  const configuration = new Configuration({
+    basePath: API_BASE_URL,
+    apiKey: apiKey,
+    headers: extraHeaders,
+  });
+  
+  return new DefaultApi(configuration);
+}

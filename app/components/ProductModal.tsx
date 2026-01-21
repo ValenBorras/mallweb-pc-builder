@@ -39,10 +39,10 @@ export function ProductModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm pointer-events-auto"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl pointer-events-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gray-50">
           <h2 className="text-xl font-bold text-gray-900">{product.brand}</h2>

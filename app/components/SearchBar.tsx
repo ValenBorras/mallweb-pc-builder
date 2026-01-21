@@ -46,14 +46,14 @@ export function SearchBar({ category, onSearch, isLoading = false }: SearchBarPr
       <form onSubmit={handleSubmit}>
         <div className="relative">
           {/* Search icon */}
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+          <div className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-500">
             {isLoading ? (
-              <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             )}
@@ -69,7 +69,7 @@ export function SearchBar({ category, onSearch, isLoading = false }: SearchBarPr
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             placeholder="Buscar productos..."
             className="
-              w-full py-3 pl-12 pr-12 rounded-xl
+              w-full py-2.5 md:py-3 pl-10 md:pl-12 pr-10 md:pr-12 rounded-xl text-sm md:text-base
               bg-white border border-gray-300
               text-gray-900 placeholder-gray-500
               focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20
@@ -82,9 +82,9 @@ export function SearchBar({ category, onSearch, isLoading = false }: SearchBarPr
             <button
               type="button"
               onClick={handleClear}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+              className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>

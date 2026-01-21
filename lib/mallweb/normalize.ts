@@ -98,49 +98,74 @@ function getIdentifier(ids: MallWebIdentifier[], type: number): string | undefin
 }
 
 /**
- * Normalize a Mall Web item to our internal Product type
+ * Map currency codes to standard format
+ * QVJT is a base64-encoded or internal code for ARS (Pesos Argentinos)
  */
-export function normalizeItem(item: MallWebItem, includeRaw = false): Product {
+function normalizeCurrency(currency: string): string {
+  const currencyMap: Record<string, string> = {
+    'QVJT': 'ARS',  // Pesos Argentinos
+    'USD': 'USD',   // US Dollars
+    'EUR': 'EUR',   // Euros
+  };
+  
+  return currencyMap[currency] || currency;
+}
+
+/**
+ * Normalize a Mall Web item to our internal Product type
+ * Handles both snake_case (old API) and camelCase (new API) formats
+ */
+export function normalizeItem(item: any, includeRaw = false): Product {
+  // Handle both camelCase and snake_case
+  const sourceId = item.sourceId || item.source_id;
+  const attributeGroups = item.attributeGroups || item.attribute_groups;
+  const unitDimensions = item.unitDimensions || item.unit_dimensions;
+  
   const offer = item.offers?.[0];
   
+  // Parse price and handle both currency formats
+  const price = offer ? parseFloat(offer.price.amount) : 0;
+  const rawCurrency = offer?.price.currency || 'ARS';
+  const currency = normalizeCurrency(rawCurrency);
+  
   return {
-    id: item.source_id,
+    id: sourceId,
     title: item.title,
     brand: item.brand || 'Sin marca',
     description: item.description || '',
-    price: offer ? parseFloat(offer.price.amount) : 0,
-    originalPrice: offer?.strikethrough_price 
-      ? parseFloat(offer.strikethrough_price.amount) 
+    price: price,
+    originalPrice: offer?.strikethroughPrice?.amount || offer?.strikethrough_price?.amount
+      ? parseFloat(offer?.strikethroughPrice?.amount || offer?.strikethrough_price?.amount) 
       : undefined,
-    currency: offer?.price.currency || 'USD',
+    currency: currency,
     stock: offer?.stock ?? 0,
     imageUrl: getBestImageUrl(item),
     images: getAllImageUrls(item),
-    categories: item.category.map((cat) => ({
+    categories: item.category.map((cat: any) => ({
       id: cat.id,
       name: cat.name,
     })),
     identifiers: {
-      sku: item.source_id,
+      sku: sourceId,
       upc: getIdentifier(item.ids, 2),
       ean: getIdentifier(item.ids, 3),
       mpn: getIdentifier(item.ids, 5),
     },
-    dimensions: item.unit_dimensions
+    dimensions: unitDimensions
       ? {
-          height: item.unit_dimensions.height,
-          width: item.unit_dimensions.width,
-          depth: item.unit_dimensions.depth,
-          weight: item.unit_dimensions.weight,
+          height: unitDimensions.height,
+          width: unitDimensions.width,
+          depth: unitDimensions.depth,
+          weight: unitDimensions.weight,
         }
       : undefined,
     rating: {
       votes: item.rating?.votes ?? 0,
       value: item.rating?.value ?? 0,
     },
-    attributeGroups: item.attribute_groups?.map((group) => ({
+    attributeGroups: attributeGroups?.map((group: any) => ({
       name: group.name,
-      attributes: group.attributes.map((attr) => ({
+      attributes: group.attributes.map((attr: any) => ({
         name: attr.name,
         value: attr.value,
       })),

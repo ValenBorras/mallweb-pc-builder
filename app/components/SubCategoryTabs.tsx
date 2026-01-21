@@ -31,19 +31,19 @@ function SubCategoryTabItem({
     <button
       onClick={onClick}
       className={`
-        flex items-center gap-2.5 px-4 py-3 rounded-t-lg border-b-2 transition-all duration-200 whitespace-nowrap
+        flex items-center gap-2 px-3 md:px-4 py-2.5 md:py-3 rounded-lg md:rounded-t-lg md:border-b-2 border transition-all duration-200 whitespace-nowrap
         ${isActive 
-          ? 'bg-red-50 border-red-500 text-red-600' 
-          : 'bg-white border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          ? 'bg-red-50 md:border-red-500 border-red-300 md:border-transparent md:border-b-red-500 text-red-600 shadow-sm md:shadow-none' 
+          : 'bg-white border-gray-200 md:border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 hover:border-gray-300'
         }
       `}
     >
-      <IconComponent className={`w-5 h-5 ${isActive ? 'text-red-600' : 'text-gray-500'}`} />
-      <span className="text-sm font-medium">{displayName}</span>
+      <IconComponent className={`w-4 h-4 md:w-5 md:h-5 ${isActive ? 'text-red-600' : 'text-gray-500'}`} />
+      <span className="text-xs md:text-sm font-medium">{displayName}</span>
       {/* Only show green dot for main categories, not sub-categories */}
       {hasPart && !category.parentCategory && (
         <span className={`
-          w-2 h-2 rounded-full
+          w-1.5 h-1.5 md:w-2 md:h-2 rounded-full
           ${isActive ? 'bg-red-500' : 'bg-green-500'}
         `} />
       )}
@@ -61,8 +61,8 @@ export function SubCategoryTabs({
   const subCategories = getSubCategories(parentCategory);
 
   return (
-    <div className="mb-6 border-b border-gray-200">
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+    <div className="border-b border-gray-200 -mx-1 px-1">
+      <div className="flex gap-1.5 md:gap-2 overflow-x-auto pb-0 md:pb-0 scrollbar-hide">
         {subCategories.map((subCategory) => (
           <SubCategoryTabItem
             key={subCategory.key}

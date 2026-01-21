@@ -221,10 +221,8 @@ export function CategorySelector({ activeCategory, onCategoryChange }: CategoryS
   const mainCategories = getMainCategories();
   const showSubTabs = hasSubCategories(activeCategory);
   const subCategories = showSubTabs ? getSubCategories(activeCategory) : [];
-  const getTotalPrice = useBuildStore((state) => state.getTotalPrice);
   const getPartCount = useBuildStore((state) => state.getPartCount);
   const clearBuild = useBuildStore((state) => state.clearBuild);
-  const totalPrice = getTotalPrice();
   const partCount = getPartCount();
 
   // Determine the effective active category (if activeCategory is a sub-category, use its parent)
@@ -233,8 +231,8 @@ export function CategorySelector({ activeCategory, onCategoryChange }: CategoryS
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
-      <div className="shrink-0 mb-4">
-        <div className="flex items-center justify-between px-1 mb-3">
+      <div className="shrink-0 mb-3">
+        <div className="flex items-center justify-between px-1 mb-2">
           <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
             Componentes
           </h2>
@@ -291,27 +289,6 @@ export function CategorySelector({ activeCategory, onCategoryChange }: CategoryS
         </div>
       </div>
       
-      {/* Total Price - Always visible */}
-      <div className="mt-6 shrink-0">
-        <div className="bg-gradient-to-br from-red-50 to-red-100/50 rounded-xl p-5 border-2 border-red-200/50 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-                Total de tu PC
-              </span>
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-red-600">
-              ${totalPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-            </span>
-            <span className="text-sm text-gray-600 font-medium">USD</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

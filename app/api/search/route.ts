@@ -60,10 +60,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get API key from environment
-    const apiKey = process.env.MALLWEB_API_KEY;
+    // Get API key from environment (using unified checkout API key)
+    const apiKey = process.env.CHECKOUT_API_KEY || process.env.MALLWEB_API_KEY;
     if (!apiKey) {
-      console.error('MALLWEB_API_KEY is not configured');
+      console.error('CHECKOUT_API_KEY is not configured');
       return NextResponse.json(
         { error: 'Server configuration error' },
         { status: 500 }
