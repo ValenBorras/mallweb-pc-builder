@@ -72,7 +72,7 @@ export default function Home() {
         {/* Powered by */}
         <div className="mt-16 pt-8 border-t border-gray-200">
           <p className="text-xs text-gray-500">
-            Powered by Mall Web (Gestión Resellers)
+            Powered by Mall Web 
           </p>
         </div>
       </div>

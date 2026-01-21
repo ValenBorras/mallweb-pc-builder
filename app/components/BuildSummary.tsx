@@ -1,18 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useBuildStore, useTotalQuantity, useMaxRamSlots, USE_INCLUDED_COOLER_ID } from '@/store/buildStore';
 import { getCategoriesArray, getRequiredCategories, isGpuRequired, isCoolerRequired } from '@/lib/catalog/categories';
 import { getCategoryIcon } from '@/lib/catalog/icons';
 import type { ProductWithQuantity } from '@/store/buildStore';
 import { CheckoutModal, type CheckoutFormData } from './CheckoutModal';
+import { BuildAnalysisModal } from './BuildAnalysisModal';
 
 export function BuildSummary() {
   const [isClient, setIsClient] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [cachedAnalysis, setCachedAnalysis] = useState<string | null>(null);
+  const [componentsHash, setComponentsHash] = useState<string>('');
   
   const parts = useBuildStore((state) => state.parts);
   const getTotalPrice = useBuildStore((state) => state.getTotalPrice);
@@ -26,6 +30,52 @@ export function BuildSummary() {
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Get components for analysis
+  const getComponentsForAnalysis = useCallback(() => {
+    const components: Array<{ category: string; title: string; description?: string }> = [];
+    
+    for (const [categoryKey, part] of Object.entries(parts)) {
+      if (Array.isArray(part) && part.length > 0) {
+        // Multi-select categories (RAM, Storage)
+        for (const item of part) {
+          components.push({
+            category: categoryKey.toUpperCase(),
+            title: item.product.product.title,
+            description: item.product.product.description,
+          });
+        }
+      } else if (part !== null && !Array.isArray(part)) {
+        // Single-select categories
+        if (part.product.id !== USE_INCLUDED_COOLER_ID) {
+          components.push({
+            category: categoryKey.toUpperCase(),
+            title: part.product.title,
+            description: part.product.description,
+          });
+        }
+      }
+    }
+    
+    return components;
+  }, [parts]);
+
+  // Generate a hash from components to detect changes
+  const generateComponentsHash = useCallback(() => {
+    const components = getComponentsForAnalysis();
+    return JSON.stringify(components.map(c => c.title).sort());
+  }, [getComponentsForAnalysis]);
+
+  // Clear cached analysis when components change
+  useEffect(() => {
+    if (isClient) {
+      const newHash = generateComponentsHash();
+      if (newHash !== componentsHash) {
+        setComponentsHash(newHash);
+        setCachedAnalysis(null);
+      }
+    }
+  }, [parts, isClient, generateComponentsHash, componentsHash]);
 
   const categories = getCategoriesArray();
   const totalPrice = getTotalPrice();
@@ -547,6 +597,23 @@ export function BuildSummary() {
             </div>
           )}
 
+          {/* Analysis button */}
+          {partCount > 0 && canCheckout && (
+            <button
+              onClick={() => setShowAnalysisModal(true)}
+              className="w-full py-3 md:py-4 px-4 md:px-6 rounded-lg md:rounded-xl font-bold text-sm md:text-base transition-all duration-200 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 hover:shadow-xl hover:shadow-purple-500/30 transform hover:scale-[1.02] mb-3 md:mb-4 flex items-center justify-center gap-2"
+            >
+              <Image
+                src="/mallwi.png"
+                alt="Mallwi"
+                width={24}
+                height={24}
+                className="w-5 h-5 md:w-6 md:h-6"
+              />
+              <span>Análisis del Build</span>
+            </button>
+          )}
+
           {/* Checkout button */}
           <button
             onClick={handleOpenCheckout}
@@ -581,6 +648,15 @@ export function BuildSummary() {
         onSubmit={handleCheckoutSubmit}
         isProcessing={isCheckingOut}
         totalAmount={totalPrice}
+      />
+
+      {/* Analysis Modal */}
+      <BuildAnalysisModal
+        isOpen={showAnalysisModal}
+        onClose={() => setShowAnalysisModal(false)}
+        components={getComponentsForAnalysis()}
+        cachedAnalysis={cachedAnalysis}
+        onAnalysisGenerated={setCachedAnalysis}
       />
     </div>
   );

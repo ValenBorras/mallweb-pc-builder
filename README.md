@@ -10,6 +10,7 @@ Un clon de "Armá tu PC" de CompraGamer, usando el catálogo de productos de Mal
 
 - 🔍 **Búsqueda de productos** - Acceso al catálogo completo de Mall Web
 - ✅ **Verificación de compatibilidad** - Reglas automáticas para validar compatibilidad entre componentes
+- 🤖 **Análisis con IA (mallwi)** - Análisis técnico completo de tu build usando inteligencia artificial
 - 💾 **Persistencia local** - Tu build se guarda automáticamente en el navegador
 - 📱 **Diseño responsive** - Funciona en desktop y mobile
 - ⚡ **Rendimiento optimizado** - Server Components, caching, y lazy loading
@@ -45,16 +46,20 @@ Un clon de "Armá tu PC" de CompraGamer, usando el catálogo de productos de Mal
 Crea un archivo `.env.local` en la raíz del proyecto:
 
 ```bash
-cp .env.example .env.local
+touch .env.local
 ```
 
-Editá el archivo y agregá tu API key:
+Agregá las siguientes variables de entorno:
 
 ```env
+# Mall Web API (requerido para búsqueda de productos)
 MALLWEB_API_KEY=tu_api_key_aqui
+
+# OpenAI API (requerido para análisis de builds con IA)
+OPENAI_API_KEY=sk-tu_openai_api_key_aqui
 ```
 
-> ⚠️ **Importante**: Nunca commitees tu API key. El archivo `.env.local` ya está en `.gitignore`.
+> ⚠️ **Importante**: Nunca commitees tus API keys. El archivo `.env.local` ya está en `.gitignore`.
 
 ### Instalación
 
@@ -159,6 +164,35 @@ Busca productos en el catálogo de Mall Web.
   "currentPage": 1,
   "totalPages": 5,
   "keywords": "ryzen 5600"
+}
+```
+
+### POST /api/analyze-build
+
+Genera un análisis técnico completo del build usando inteligencia artificial (mallwi).
+
+**Request:**
+```json
+{
+  "components": [
+    {
+      "category": "CPU",
+      "title": "AMD Ryzen 5 5600X",
+      "description": "Procesador 6 cores, 12 threads..."
+    },
+    {
+      "category": "GPU",
+      "title": "NVIDIA RTX 4060 Ti",
+      "description": "Tarjeta gráfica 8GB GDDR6..."
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "analysis": "🧩 Tipo de PC\n\nGaming Full HD/QHD...\n\n✅ Puntos fuertes de esta configuración\n..."
 }
 ```
 
