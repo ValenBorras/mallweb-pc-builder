@@ -761,50 +761,64 @@ function extractWaterCoolingSupport(product: Product): { supportsWaterCooling: b
   const mentionsWaterCooling = /(?:water\s*cool(?:ing|er)?|watercool(?:ing|er)?|refrigeraci[oó]n\s*l[ií]quida|AIO|radiador)/i.test(text);
   
   // Check if text explicitly says "No" or "not compatible"
-  const explicitlyNotSupported = /(?:sin|without|no)\s+(?:soporte|support|compatible).*?(?:water\s*cool|radiador|AIO)/i.test(text) ||
-    /(?:water\s*cool|radiador|AIO).*?(?:no|not)\s+(?:compatible|soportado)/i.test(text);
+  // Improved patterns to catch "Watercooler: No compatible" and variations
+  const explicitlyNotSupported = 
+    // Pattern 1: "No soporte/compatible ... watercooler/radiador"
+    /(?:sin|without|no)\s+(?:soporte|support|compatible).*?(?:water\s*cool(?:ing|er)?|watercool(?:ing|er)?|radiador|AIO)/i.test(text) ||
+    // Pattern 2: "watercooler/radiador ... no/not compatible"
+    /(?:water\s*cool(?:ing|er)?|watercool(?:ing|er)?|radiador|AIO).*?(?:no|not)\s+(?:compatible|soportado)/i.test(text) ||
+    // Pattern 3: "Soporte de Watercooler: No compatible" (specific format)
+    /(?:soporte|support).*?(?:water\s*cool(?:ing|er)?|watercool(?:ing|er)?|radiador|AIO)\s*:?\s*(?:no|not)\s+(?:compatible|soportado)/i.test(text) ||
+    // Pattern 4: Just "No compatible" after watercooler mention
+    /(?:water\s*cool(?:ing|er)?|watercool(?:ing|er)?|radiador|AIO)\s*:?\s*(?:no|not)\s+(?:compatible|soportado)/i.test(text);
   
   // Patterns to detect radiator support
   // Key logic: If mentions watercooling/radiador AND provides sizes, assume compatible (unless explicitly says no)
-  for (const size of radiatorSizes) {
-    const patterns = [
-      // Standard patterns
-      new RegExp(`(?:soporta?|soporte|admite|support|compatible)\\s*(?:para|con|with|de)?\\s*(?:radiador|radiator|AIO|water\\s*cool(?:ing|er)?|refrigeraci[oó]n\\s*l[ií]quida)\\s*(?:de|hasta|up\\s*to)?\\s*:?\\s*${size}\\s*mm`, 'i'),
-      new RegExp(`(?:radiador|radiator|AIO|water\\s*cool(?:ing|er)?)\\s*(?:de)?\\s*${size}\\s*mm`, 'i'),
-      new RegExp(`${size}\\s*mm\\s*(?:radiador|radiator|AIO|water\\s*cool)`, 'i'),
-      // Pattern for "Soporte Watercooling: Si de 240mm"
-      new RegExp(`(?:soporte|support)\\s+(?:water\\s*cool(?:ing|er)?|watercool(?:ing|er)?|refrigeraci[oó]n\\s*l[ií]quida)\\s*:?\\s*(?:si|yes|s[ií])?\\s*(?:de\\s+)?${size}\\s*mm`, 'i'),
-      // Pattern for "Soporte de Watercooler: * Frontal: Hasta 240mm" (ignores asterisks and special chars)
-      new RegExp(`(?:soporte|support)\\s+(?:de\\s+)?(?:water\\s*cool(?:ing|er)?|watercool(?:ing|er)?)\\s*:?\\s*[*\\s]*(?:frontal|trasero|superior|inferior|top|front|rear|back|bottom)\\s*:?\\s*(?:hasta|up\\s*to)?\\s*${size}\\s*mm`, 'i'),
-      // Pattern for "Frontal: Hasta 240mm", "Trasero: 120mm" (with optional asterisk before)
-      new RegExp(`[*\\s]*(?:frontal|trasero|superior|inferior|top|front|rear|back|bottom)\\s*:?\\s*(?:hasta|up\\s*to)?\\s*${size}\\s*mm`, 'i'),
-      // Pattern for "Hasta Xmm" in watercooling context
-      new RegExp(`(?:hasta|up\\s*to)\\s*${size}\\s*mm`, 'i'),
-    ];
-    
-    for (const pattern of patterns) {
-      if (pattern.test(text)) {
-        if (!supportedSizes.includes(size)) {
-          supportedSizes.push(size);
+  // IMPORTANT: Skip detection if explicitly not supported
+  if (!explicitlyNotSupported) {
+    for (const size of radiatorSizes) {
+      const patterns = [
+        // Standard patterns
+        new RegExp(`(?:soporta?|soporte|admite|support|compatible)\\s*(?:para|con|with|de)?\\s*(?:radiador|radiator|AIO|water\\s*cool(?:ing|er)?|refrigeraci[oó]n\\s*l[ií]quida)\\s*(?:de|hasta|up\\s*to)?\\s*:?\\s*${size}\\s*mm`, 'i'),
+        new RegExp(`(?:radiador|radiator|AIO|water\\s*cool(?:ing|er)?)\\s*(?:de)?\\s*${size}\\s*mm`, 'i'),
+        new RegExp(`${size}\\s*mm\\s*(?:radiador|radiator|AIO|water\\s*cool)`, 'i'),
+        // Pattern for "Soporte Watercooling: Si de 240mm"
+        new RegExp(`(?:soporte|support)\\s+(?:water\\s*cool(?:ing|er)?|watercool(?:ing|er)?|refrigeraci[oó]n\\s*l[ií]quida)\\s*:?\\s*(?:si|yes|s[ií])?\\s*(?:de\\s+)?${size}\\s*mm`, 'i'),
+        // Pattern for "Soporte de Watercooler: * Frontal: Hasta 240mm" (ignores asterisks and special chars)
+        new RegExp(`(?:soporte|support)\\s+(?:de\\s+)?(?:water\\s*cool(?:ing|er)?|watercool(?:ing|er)?)\\s*:?\\s*[*\\s]*(?:frontal|trasero|superior|inferior|top|front|rear|back|bottom)\\s*:?\\s*(?:hasta|up\\s*to)?\\s*${size}\\s*mm`, 'i'),
+        // Pattern for "Frontal: Hasta 240mm", "Trasero: 120mm" (with optional asterisk before)
+        new RegExp(`[*\\s]*(?:frontal|trasero|superior|inferior|top|front|rear|back|bottom)\\s*:?\\s*(?:hasta|up\\s*to)?\\s*${size}\\s*mm`, 'i'),
+        // Pattern for "Hasta Xmm" in watercooling context
+        new RegExp(`(?:hasta|up\\s*to)\\s*${size}\\s*mm`, 'i'),
+      ];
+      
+      for (const pattern of patterns) {
+        if (pattern.test(text)) {
+          if (!supportedSizes.includes(size)) {
+            supportedSizes.push(size);
+          }
+          break;
         }
-        break;
       }
     }
   }
   
   // Additional check: If text mentions watercooling and has size numbers, try to extract them
   // This catches cases like "Soporte de Watercooler: * Frontal: Hasta 240mm"
+  // IMPORTANT: Only do this if NOT explicitly unsupported
   if (mentionsWaterCooling && !explicitlyNotSupported) {
     for (const size of radiatorSizes) {
-      // Look for size patterns in the text
-      if (new RegExp(`\\b${size}\\s*mm\\b`, 'i').test(text) && !supportedSizes.includes(size)) {
+      // Look for size patterns in the text, but only in water cooling context
+      // Avoid detecting sizes from other parts like "disipador de torre: 140mm"
+      const wcPattern = new RegExp(`(?:water\\s*cool(?:ing|er)?|watercool(?:ing|er)?|refrigeraci[oó]n\\s*l[ií]quida|AIO|radiador|frontal|trasero|superior|inferior|top|front|rear|back|bottom)[^.]*?\\b${size}\\s*mm\\b`, 'i');
+      if (wcPattern.test(text) && !supportedSizes.includes(size)) {
         supportedSizes.push(size);
       }
     }
   }
   
-  // Try to extract from attribute groups
-  if (product.attributeGroups) {
+  // Try to extract from attribute groups (only if not explicitly unsupported)
+  if (product.attributeGroups && !explicitlyNotSupported) {
     for (const group of product.attributeGroups) {
       for (const attr of group.attributes) {
         const attrText = `${attr.name} ${attr.value}`;

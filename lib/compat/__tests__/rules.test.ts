@@ -852,5 +852,40 @@ describe('Mall Web Specific Format Detection', () => {
     const result240 = evaluateCompatibility(cooler240, 'cooler', build240);
     expect(result240.allowed).toBe(true);
   });
+
+  it('should detect "Soporte de Watercooler: No compatible" as NOT supporting water cooling', () => {
+    const pcCase = createMockProduct({
+      id: 'case-1',
+      title: 'Gabinete Mini Tower',
+      description: 'Soporte de Watercooler: No compatible. Soporte de disipador de torre: Hasta 140mm de altura.',
+    });
+
+    const cooler120 = createMockProduct({
+      id: 'cooler-1',
+      title: 'AIO 120mm',
+      description: 'Water cooling 120mm',
+    });
+
+    const cooler240 = createMockProduct({
+      id: 'cooler-2',
+      title: 'AIO 240mm',
+      description: 'Water cooling 240mm',
+    });
+
+    const caseWithSpec = createProductWithSpec(pcCase, 'case');
+
+    // Test 120mm AIO - should FAIL (case explicitly says no water cooling)
+    const build120 = createBuild({ case: caseWithSpec });
+    const result120 = evaluateCompatibility(cooler120, 'cooler', build120);
+    expect(result120.allowed).toBe(false);
+    expect(result120.failures.length).toBeGreaterThan(0);
+    expect(result120.failures[0]).toContain('no indica soporte');
+
+    // Test 240mm AIO - should FAIL (case explicitly says no water cooling)
+    const build240 = createBuild({ case: caseWithSpec });
+    const result240 = evaluateCompatibility(cooler240, 'cooler', build240);
+    expect(result240.allowed).toBe(false);
+    expect(result240.failures.length).toBeGreaterThan(0);
+  });
 });
 
