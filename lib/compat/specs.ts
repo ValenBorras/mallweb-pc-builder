@@ -470,7 +470,15 @@ function extractMotherboardSpecs(product: Product): ProductSpec {
   const memorySlots = extractNumber(text, /(\d+)\s*(?:slots?|ranuras?)\s*(?:de\s*)?(?:RAM|memoria|DIMM)/i)
     ?? extractNumber(text, /(\d+)\s*x\s*DIMM/i)
     ?? extractNumber(text, /(?:posee|tiene|incluye)\s*(\d+)\s*ranuras?\s*DIMM/i);
-  const m2Slots = extractNumber(text, /(\d)\s*(?:x\s*)?M\.?2/i);
+  
+  // Extract M.2 slots (for M.2 SSDs)
+  const m2Slots = extractNumber(text, /(\d+)\s*(?:x\s*)?M\.?2/i);
+  
+  // Extract SATA ports
+  // Patterns: "4x SATA", "4 SATA", "4 puertos SATA", "SATA: 4"
+  const sataPorts = extractNumber(text, /(\d+)\s*(?:x\s*)?(?:puertos?\s*)?SATA/i)
+    ?? extractNumber(text, /SATA[:\s]*(\d+)/i)
+    ?? extractNumber(text, /(\d+)\s*(?:puertos?\s*)?SATA\s*(?:6Gb\/s|III)?/i);
 
   return {
     socket,
@@ -480,6 +488,7 @@ function extractMotherboardSpecs(product: Product): ProductSpec {
     maxMemory,
     memorySlots,
     m2Slots,
+    sataPorts,
   };
 }
 
@@ -718,12 +727,16 @@ function extractMaxCpuCoolerHeight(product: Product): number | undefined {
   let height = extractNumber(text, /Tama[ñn]o\s+m[aá]ximo\s+CPU\s+cooler:\s*(\d{2,3})\s*mm/i);
   if (height) return height;
   
-  // Pattern 1: "cooler hasta 165mm", "CPU cooler max 165mm"
-  height = extractNumber(text, /(?:cooler|disipador|CPU)[^\d]*(?:hasta|max|m[aá]ximo|up to)[^\d]*(\d{2,3})\s*mm/i);
+  // Pattern 0b: "Soporte de disipador de torre: Hasta 160mm de altura"
+  height = extractNumber(text, /Soporte\s+de\s+disipador\s+de\s+torre:\s*(?:hasta|up\s+to)\s*(\d{2,3})\s*mm/i);
   if (height) return height;
   
-  // Pattern 2: "165mm CPU cooler", "165mm de cooler"
-  height = extractNumber(text, /(\d{2,3})\s*mm\s*(?:de\s*)?(?:cooler|disipador|CPU)/i);
+  // Pattern 1: "cooler hasta 165mm", "CPU cooler max 165mm", "disipador hasta 165mm"
+  height = extractNumber(text, /(?:cooler|disipador|CPU)(?:\s+de\s+torre)?[^\d]*(?:hasta|max|m[aá]ximo|up\s+to)[^\d]*(\d{2,3})\s*mm/i);
+  if (height) return height;
+  
+  // Pattern 2: "165mm CPU cooler", "165mm de cooler", "165mm de altura"
+  height = extractNumber(text, /(\d{2,3})\s*mm\s*(?:de\s*)?(?:altura|cooler|disipador|CPU)/i);
   if (height) return height;
   
   // Pattern 3: Generic "cooler" or "disipador" with mm
@@ -731,6 +744,95 @@ function extractMaxCpuCoolerHeight(product: Product): number | undefined {
   if (height) return height;
   
   return undefined;
+}
+
+/**
+ * Extract water cooling / radiator support from case
+ * Returns whether the case supports water cooling and which radiator sizes
+ */
+function extractWaterCoolingSupport(product: Product): { supportsWaterCooling: boolean; supportedRadiatorSizes: number[] } {
+  const text = `${product.title} ${product.description}`;
+  const supportedSizes: number[] = [];
+  
+  // Common radiator sizes in mm
+  const radiatorSizes = [120, 140, 240, 280, 360, 420];
+  
+  // Check if text mentions water cooling/watercooler/AIO
+  const mentionsWaterCooling = /(?:water\s*cool(?:ing|er)?|watercool(?:ing|er)?|refrigeraci[oó]n\s*l[ií]quida|AIO|radiador)/i.test(text);
+  
+  // Check if text explicitly says "No" or "not compatible"
+  const explicitlyNotSupported = /(?:sin|without|no)\s+(?:soporte|support|compatible).*?(?:water\s*cool|radiador|AIO)/i.test(text) ||
+    /(?:water\s*cool|radiador|AIO).*?(?:no|not)\s+(?:compatible|soportado)/i.test(text);
+  
+  // Patterns to detect radiator support
+  // Key logic: If mentions watercooling/radiador AND provides sizes, assume compatible (unless explicitly says no)
+  for (const size of radiatorSizes) {
+    const patterns = [
+      // Standard patterns
+      new RegExp(`(?:soporta?|soporte|admite|support|compatible)\\s*(?:para|con|with|de)?\\s*(?:radiador|radiator|AIO|water\\s*cool(?:ing|er)?|refrigeraci[oó]n\\s*l[ií]quida)\\s*(?:de|hasta|up\\s*to)?\\s*:?\\s*${size}\\s*mm`, 'i'),
+      new RegExp(`(?:radiador|radiator|AIO|water\\s*cool(?:ing|er)?)\\s*(?:de)?\\s*${size}\\s*mm`, 'i'),
+      new RegExp(`${size}\\s*mm\\s*(?:radiador|radiator|AIO|water\\s*cool)`, 'i'),
+      // Pattern for "Soporte Watercooling: Si de 240mm"
+      new RegExp(`(?:soporte|support)\\s+(?:water\\s*cool(?:ing|er)?|watercool(?:ing|er)?|refrigeraci[oó]n\\s*l[ií]quida)\\s*:?\\s*(?:si|yes|s[ií])?\\s*(?:de\\s+)?${size}\\s*mm`, 'i'),
+      // Pattern for "Soporte de Watercooler: * Frontal: Hasta 240mm" (ignores asterisks and special chars)
+      new RegExp(`(?:soporte|support)\\s+(?:de\\s+)?(?:water\\s*cool(?:ing|er)?|watercool(?:ing|er)?)\\s*:?\\s*[*\\s]*(?:frontal|trasero|superior|inferior|top|front|rear|back|bottom)\\s*:?\\s*(?:hasta|up\\s*to)?\\s*${size}\\s*mm`, 'i'),
+      // Pattern for "Frontal: Hasta 240mm", "Trasero: 120mm" (with optional asterisk before)
+      new RegExp(`[*\\s]*(?:frontal|trasero|superior|inferior|top|front|rear|back|bottom)\\s*:?\\s*(?:hasta|up\\s*to)?\\s*${size}\\s*mm`, 'i'),
+      // Pattern for "Hasta Xmm" in watercooling context
+      new RegExp(`(?:hasta|up\\s*to)\\s*${size}\\s*mm`, 'i'),
+    ];
+    
+    for (const pattern of patterns) {
+      if (pattern.test(text)) {
+        if (!supportedSizes.includes(size)) {
+          supportedSizes.push(size);
+        }
+        break;
+      }
+    }
+  }
+  
+  // Additional check: If text mentions watercooling and has size numbers, try to extract them
+  // This catches cases like "Soporte de Watercooler: * Frontal: Hasta 240mm"
+  if (mentionsWaterCooling && !explicitlyNotSupported) {
+    for (const size of radiatorSizes) {
+      // Look for size patterns in the text
+      if (new RegExp(`\\b${size}\\s*mm\\b`, 'i').test(text) && !supportedSizes.includes(size)) {
+        supportedSizes.push(size);
+      }
+    }
+  }
+  
+  // Try to extract from attribute groups
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        const attrText = `${attr.name} ${attr.value}`;
+        
+        // Look for radiator/water cooling related attributes
+        if (/radiador|radiator|AIO|water\s*cool(?:ing|er)?|refrigeraci[oó]n\s*l[ií]quida/i.test(attrText)) {
+          for (const size of radiatorSizes) {
+            // Pattern for "Si de 240mm" or "Yes 240mm" or direct "240mm"
+            if (new RegExp(`(?:si|yes|s[ií])?\\s*(?:de\\s+)?${size}\\s*mm`, 'i').test(attrText)) {
+              if (!supportedSizes.includes(size)) {
+                supportedSizes.push(size);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // IMPORTANT: New logic
+  // If the product mentions water cooling/radiador AND provides specific sizes AND doesn't explicitly say "no",
+  // then it IS compatible with water cooling
+  const supportsWaterCooling = supportedSizes.length > 0 && mentionsWaterCooling && !explicitlyNotSupported;
+  
+  return {
+    supportsWaterCooling,
+    supportedRadiatorSizes: supportedSizes.sort((a, b) => a - b),
+  };
 }
 
 /**
@@ -831,12 +933,19 @@ function extractCaseSpecs(product: Product): ProductSpec {
   // Detect if case includes a PSU and its wattage
   const psuInfo = extractIncludesPsu(product);
 
+  // Detect water cooling / radiator support
+  const waterCoolingInfo = extractWaterCoolingSupport(product);
+
   return {
     supportedFormFactors: supportedFormFactors.length > 0 ? supportedFormFactors : undefined,
     maxGpuLength,
     maxCpuCoolerHeight,
     includesPsu: psuInfo.includesPsu,
     includedPsuWattage: psuInfo.psuWattage,
+    supportsWaterCooling: waterCoolingInfo.supportsWaterCooling,
+    supportedRadiatorSizes: waterCoolingInfo.supportedRadiatorSizes.length > 0 
+      ? waterCoolingInfo.supportedRadiatorSizes 
+      : undefined,
   };
 }
 
@@ -872,6 +981,90 @@ function extractPsuSpecs(product: Product): ProductSpec {
 }
 
 /**
+ * Detect if storage is M.2 type
+ * Priority:
+ * 1. First check attributes for "Formato de disco" (Disk Format)
+ * 2. If not found, check title and description
+ * 
+ * Exported for use in components that need to detect storage type
+ */
+export function isStorageM2(product: Product): boolean {
+  // PRIORITY 1: Check in attribute groups for "Formato de disco" or similar
+  if (product.attributeGroups) {
+    for (const group of product.attributeGroups) {
+      for (const attr of group.attributes) {
+        // Look for attributes like "Formato de disco", "Formato", "Form Factor", "Disk Format", etc.
+        if (/formato|form\s*factor|disk\s*format|tipo/i.test(attr.name)) {
+          const value = attr.value.toLowerCase();
+          
+          // Check if value contains M.2 or M2
+          if (/\bm\.?2\b/i.test(value)) {
+            return true;
+          }
+          
+          // Check if value contains 2.5" (SATA format) - if found, it's NOT M.2
+          if (/2\.?5["']?/i.test(value) || /sata/i.test(value)) {
+            return false;
+          }
+          
+          // Check if value contains 3.5" (HDD format) - if found, it's NOT M.2
+          if (/3\.?5["']?/i.test(value)) {
+            return false;
+          }
+        }
+      }
+    }
+  }
+  
+  // PRIORITY 2: If no "Formato de disco" attribute found, check in title and description
+  const text = `${product.title} ${product.description}`;
+  
+  // Check for M.2 mentions
+  if (/\bM\.?2\b/i.test(text)) {
+    return true;
+  }
+  
+  // Default: assume SATA if M.2 not found
+  return false;
+}
+
+/**
+ * Extract storage form factor from attributes
+ * Priority: Check attributes first for "Formato de disco"
+ */
+function extractStorageFormFactorFromAttributes(product: Product): string | undefined {
+  if (!product.attributeGroups) {
+    return undefined;
+  }
+  
+  for (const group of product.attributeGroups) {
+    for (const attr of group.attributes) {
+      // Look for attributes like "Formato de disco", "Formato", "Form Factor", etc.
+      if (/formato|form\s*factor|disk\s*format|tipo/i.test(attr.name)) {
+        const value = attr.value.toLowerCase();
+        
+        // Check for M.2 format
+        if (/\bm\.?2\b/i.test(value)) {
+          return 'M.2';
+        }
+        
+        // Check for 2.5" format
+        if (/2\.?5["']?/i.test(value)) {
+          return '2.5';
+        }
+        
+        // Check for 3.5" format
+        if (/3\.?5["']?/i.test(value)) {
+          return '3.5';
+        }
+      }
+    }
+  }
+  
+  return undefined;
+}
+
+/**
  * Extract storage specs from product
  */
 function extractStorageSpecs(product: Product): ProductSpec {
@@ -885,10 +1078,15 @@ function extractStorageSpecs(product: Product): ProductSpec {
     ? (extractNumber(text, /(\d+)\s*TB/i) ?? 0) * 1000
     : extractNumber(text, /(\d+)\s*GB/i);
 
-  let storageFormFactor: string | undefined;
-  if (/\bM\.?2\b/i.test(text)) storageFormFactor = 'M.2';
-  else if (/2\.5/i.test(text)) storageFormFactor = '2.5';
-  else if (/3\.5/i.test(text)) storageFormFactor = '3.5';
+  // PRIORITY 1: Try to extract form factor from attributes first
+  let storageFormFactor = extractStorageFormFactorFromAttributes(product);
+  
+  // PRIORITY 2: If not found in attributes, check in title/description
+  if (!storageFormFactor) {
+    if (/\bM\.?2\b/i.test(text)) storageFormFactor = 'M.2';
+    else if (/2\.5["']?/i.test(text)) storageFormFactor = '2.5';
+    else if (/3\.5["']?/i.test(text)) storageFormFactor = '3.5';
+  }
 
   const storageType = /\bHDD\b/i.test(text) ? 'HDD' : 'SSD';
 
@@ -897,11 +1095,19 @@ function extractStorageSpecs(product: Product): ProductSpec {
   const writeSpeed = extractNumber(text, /escritura[^\d]*(\d{3,4})/i)
     ?? extractNumber(text, /(\d{3,4})\s*MB\/s\s*(?:escritura|write)/i);
 
+  // Detect if storage uses M.2 connector
+  const storageIsM2 = isStorageM2(product);
+  
+  // Determine storage connection type for compatibility checks
+  // If it's M.2, it uses M.2 slots; otherwise it uses SATA ports
+  const storageConnectionType: 'M.2' | 'SATA' = storageIsM2 ? 'M.2' : 'SATA';
+
   return {
     storageInterface,
     storageCapacity,
     storageFormFactor,
     storageType,
+    storageConnectionType,
     readSpeed,
     writeSpeed,
   };
@@ -914,14 +1120,51 @@ function extractCoolerSpecs(product: Product): ProductSpec {
   const text = `${product.title} ${product.description}`;
 
   const coolerSockets = extractPatterns(text, SOCKET_PATTERNS);
-  const coolerHeight = extractNumber(text, /(\d{2,3})\s*mm/i);
+  // Extract cooler height - supports decimals like 164.8mm
+  const coolerHeight = extractNumber(text, /(\d{2,3}(?:\.\d+)?)\s*mm/i);
   
   let coolerType: 'air' | 'aio' | undefined;
   let aioSize: number | undefined;
 
-  if (/\bAIO\b/i.test(text) || /\blíquida?\b/i.test(text) || /liquid/i.test(text)) {
+  // Detect AIO/water cooling
+  // Look for keywords: AIO, líquida, liquid, water cooling, refrigeración líquida, watercooler
+  if (/\b(AIO|all.in.one)\b/i.test(text) || 
+      /\b(l[ií]quida?|liquid)\b/i.test(text) || 
+      /\b(water\s*cool(?:ing|er)?)\b/i.test(text) ||
+      /\b(refrigeraci[oó]n\s*l[ií]quida)\b/i.test(text)) {
     coolerType = 'aio';
-    aioSize = extractNumber(text, /(\d{3})\s*mm/i);
+    
+    // Try to extract radiator size (common sizes: 120, 140, 240, 280, 360, 420 mm)
+    // Pattern 1: "240mm", "360 mm"
+    const sizeMatch = text.match(/\b(120|140|240|280|360|420)\s*mm\b/i);
+    if (sizeMatch) {
+      aioSize = parseInt(sizeMatch[1]);
+    }
+    
+    // Pattern 2: Sometimes written as "2x120mm" = 240mm, "3x120mm" = 360mm
+    const multiMatch = text.match(/\b([23])\s*x\s*120\s*mm\b/i);
+    if (multiMatch && !aioSize) {
+      const multiplier = parseInt(multiMatch[1]);
+      aioSize = multiplier * 120; // 2x120 = 240, 3x120 = 360
+    }
+    
+    // Try to extract from attribute groups
+    if (!aioSize && product.attributeGroups) {
+      for (const group of product.attributeGroups) {
+        for (const attr of group.attributes) {
+          const attrText = `${attr.name} ${attr.value}`;
+          
+          // Look for radiator size in attributes
+          if (/radiador|radiator|tama[ñn]o/i.test(attrText)) {
+            const attrSizeMatch = attrText.match(/\b(120|140|240|280|360|420)\s*mm\b/i);
+            if (attrSizeMatch) {
+              aioSize = parseInt(attrSizeMatch[1]);
+              break;
+            }
+          }
+        }
+      }
+    }
   } else if (/\bair\b/i.test(text) || /\btower\b/i.test(text) || /disipador/i.test(text)) {
     coolerType = 'air';
   }

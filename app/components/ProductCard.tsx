@@ -7,7 +7,16 @@ import type { CompatibilityResult } from '@/lib/compat/types';
 import type { CategoryKey } from '@/lib/catalog/categories';
 import { getCompatibilityBadge } from '@/lib/compat/engine';
 import { isComboProduct, getComboNote } from '@/lib/catalog/filters';
-import { useTotalQuantity, useMaxRamSlots, USE_INCLUDED_COOLER_ID } from '@/store/buildStore';
+import { 
+  useTotalQuantity, 
+  useMaxRamSlots, 
+  useMaxM2Slots, 
+  useMaxSataPorts, 
+  useTotalM2Storage, 
+  useTotalSataStorage, 
+  USE_INCLUDED_COOLER_ID 
+} from '@/store/buildStore';
+import { isStorageM2 } from '@/lib/compat/specs';
 import { ProductModal } from './ProductModal';
 
 interface ProductCardProps {
@@ -56,6 +65,24 @@ export function ProductCard({
   const maxRamSlots = useMaxRamSlots();
   const isRam = categoryKey === 'ram';
   const ramLimitReached = isRam && totalRamQuantity >= maxRamSlots;
+
+  // Get Storage slot limits if this is a Storage product
+  const totalM2Storage = useTotalM2Storage();
+  const totalSataStorage = useTotalSataStorage();
+  const maxM2Slots = useMaxM2Slots();
+  const maxSataPorts = useMaxSataPorts();
+  const isStorage = categoryKey === 'storage';
+  
+  // Determine if this specific storage product is M.2 or SATA
+  // Use the same detection logic as specs.ts (checks attributes first, then description)
+  const productIsM2 = isStorage ? isStorageM2(product) : false;
+  const storageConnectionType = isStorage ? (productIsM2 ? 'M.2' : 'SATA') : undefined;
+  
+  const isM2Storage = isStorage && storageConnectionType === 'M.2';
+  const isSataStorage = isStorage && storageConnectionType === 'SATA';
+  const m2LimitReached = isM2Storage && totalM2Storage >= maxM2Slots;
+  const sataLimitReached = isSataStorage && totalSataStorage >= maxSataPorts;
+  const storageLimitReached = m2LimitReached || sataLimitReached;
 
   const badgeColorClasses = {
     green: 'bg-green-500/20 text-green-600 border-green-500/30',
@@ -192,9 +219,14 @@ export function ProductCard({
                     </span>
                     <button
                       onClick={onIncrement}
-                      disabled={product.stock <= quantity || ramLimitReached}
+                      disabled={product.stock <= quantity || ramLimitReached || storageLimitReached}
                       className="w-6 h-6 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={ramLimitReached ? `Máximo ${maxRamSlots} módulos (slots de la motherboard)` : "Incrementar"}
+                      title={
+                        ramLimitReached ? `Máximo ${maxRamSlots} módulos (slots de la motherboard)` : 
+                        m2LimitReached ? `Máximo ${maxM2Slots} disco(s) M.2` :
+                        sataLimitReached ? `Máximo ${maxSataPorts} disco(s) SATA` :
+                        "Incrementar"
+                      }
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
@@ -224,14 +256,14 @@ export function ProductCard({
                 // Add button
                 <button
                   onClick={() => onSelect(product)}
-                  disabled={product.stock === 0 || (compatibility && !compatibility.allowed) || ramLimitReached}
+                  disabled={product.stock === 0 || (compatibility && !compatibility.allowed) || ramLimitReached || storageLimitReached}
                   className="flex-1 py-2 px-3 rounded-lg text-xs font-medium
                     bg-red-600 text-white
                     hover:bg-red-700
                     disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed
                     transition-all"
                 >
-                  {product.stock === 0 ? 'Sin stock' : ramLimitReached ? 'Límite alcanzado' : 'Agregar'}
+                  {product.stock === 0 ? 'Sin stock' : (ramLimitReached || storageLimitReached) ? 'Límite alcanzado' : 'Agregar'}
                 </button>
               )}
             </div>
@@ -371,6 +403,22 @@ export function ProductCard({
           </div>
         )}
 
+        {/* Storage slots info */}
+        {isStorage && (
+          <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+            {isM2Storage && (
+              <p className="text-xs text-blue-700 leading-relaxed">
+                💾 Slots M.2: {totalM2Storage}/{maxM2Slots} ocupados
+              </p>
+            )}
+            {isSataStorage && (
+              <p className="text-xs text-blue-700 leading-relaxed">
+                💿 Puertos SATA: {totalSataStorage}/{maxSataPorts} ocupados
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex gap-2">
           {isSelected && isMultiSelect && onIncrement && onDecrement ? (
@@ -391,9 +439,14 @@ export function ProductCard({
                 </span>
                 <button
                   onClick={onIncrement}
-                  disabled={product.stock <= quantity || ramLimitReached}
+                  disabled={product.stock <= quantity || ramLimitReached || storageLimitReached}
                   className="w-7 h-7 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={ramLimitReached ? `Máximo ${maxRamSlots} módulos (slots de la motherboard)` : "Incrementar"}
+                  title={
+                    ramLimitReached ? `Máximo ${maxRamSlots} módulos (slots de la motherboard)` : 
+                    m2LimitReached ? `Máximo ${maxM2Slots} disco(s) M.2` :
+                    sataLimitReached ? `Máximo ${maxSataPorts} disco(s) SATA` :
+                    "Incrementar"
+                  }
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
@@ -423,15 +476,20 @@ export function ProductCard({
             // Add button
             <button
               onClick={() => onSelect(product)}
-              disabled={product.stock === 0 || (compatibility && !compatibility.allowed) || ramLimitReached}
+              disabled={product.stock === 0 || (compatibility && !compatibility.allowed) || ramLimitReached || storageLimitReached}
               className="flex-1 py-2.5 px-4 rounded-lg text-sm font-medium
                 bg-red-600 text-white
                 hover:bg-red-700
                 disabled:bg-gray-400 disabled:text-gray-200 disabled:cursor-not-allowed
                 transition-all"
-              title={ramLimitReached ? `Máximo ${maxRamSlots} módulos alcanzado` : undefined}
+              title={
+                ramLimitReached ? `Máximo ${maxRamSlots} módulos alcanzado` :
+                m2LimitReached ? `Máximo ${maxM2Slots} disco(s) M.2 alcanzado` :
+                sataLimitReached ? `Máximo ${maxSataPorts} disco(s) SATA alcanzado` :
+                undefined
+              }
             >
-              {product.stock === 0 ? 'Sin stock' : ramLimitReached ? 'Límite alcanzado' : 'Agregar'}
+              {product.stock === 0 ? 'Sin stock' : (ramLimitReached || storageLimitReached) ? 'Límite alcanzado' : 'Agregar'}
             </button>
           )}
         </div>

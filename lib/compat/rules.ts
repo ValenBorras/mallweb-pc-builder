@@ -846,12 +846,12 @@ const coolerCaseClearanceRule: CompatibilityRule = {
     const coolerHeight = candidate.spec.coolerHeight;
     const maxCoolerHeight = pcCase.spec.maxCpuCoolerHeight;
 
-    // Only check for air coolers
+    // Only check for air coolers (AIO compatibility is handled by coolerCaseWaterCoolingRule)
     if (candidate.spec.coolerType === 'aio') {
       return createResult(
         'cooler-case-clearance',
         'pass',
-        'AIO - verificá que el gabinete soporte radiadores',
+        '', // AIO compatibility is checked by water cooling rule
         ['cooler', 'case']
       );
     }
@@ -885,6 +885,289 @@ const coolerCaseClearanceRule: CompatibilityRule = {
 };
 
 /**
+ * Cooler (AIO) ↔ Case Water Cooling Support
+ * Checks if the case supports water cooling/AIO radiators of the cooler's size
+ */
+const coolerCaseWaterCoolingRule: CompatibilityRule = {
+  id: 'cooler-case-watercooling',
+  name: 'Cooler/Case Water Cooling',
+  description: 'El gabinete debe soportar radiadores de refrigeración líquida (AIO)',
+  sourceCategory: 'cooler',
+  targetCategories: ['case'],
+  evaluate: (candidate, build) => {
+    // Only check if cooler is AIO (water cooling)
+    if (candidate.spec.coolerType !== 'aio') {
+      return createResult(
+        'cooler-case-watercooling',
+        'pass',
+        '', // Not an AIO, so this rule doesn't apply
+        ['cooler', 'case']
+      );
+    }
+
+    const pcCase = build.get('case');
+    if (!pcCase) {
+      return createResult(
+        'cooler-case-watercooling',
+        'pass',
+        'No hay gabinete seleccionado',
+        ['cooler', 'case']
+      );
+    }
+
+    const aioSize = candidate.spec.aioSize;
+    const supportsWaterCooling = pcCase.spec.supportsWaterCooling;
+    const supportedRadiatorSizes = pcCase.spec.supportedRadiatorSizes;
+
+    // If we can't determine AIO size, warn user
+    if (!aioSize) {
+      return createResult(
+        'cooler-case-watercooling',
+        'warn',
+        'No se pudo determinar el tamaño del radiador del AIO. Verificá manualmente la compatibilidad con el gabinete.',
+        ['cooler', 'case']
+      );
+    }
+
+    // If case explicitly supports water cooling with specific sizes
+    if (supportedRadiatorSizes && supportedRadiatorSizes.length > 0) {
+      // Find the maximum supported radiator size
+      const maxSupportedSize = Math.max(...supportedRadiatorSizes);
+      
+      // Check if AIO size is less than or equal to max supported size
+      // Logic: If case supports 240mm, it also supports 120mm and 140mm (smaller radiators)
+      if (aioSize <= maxSupportedSize) {
+        return createResult(
+          'cooler-case-watercooling',
+          'pass',
+          `Gabinete soporta radiador de ${aioSize}mm (máximo: ${maxSupportedSize}mm)`,
+          ['cooler', 'case']
+        );
+      }
+      
+      return createResult(
+        'cooler-case-watercooling',
+        'fail',
+        `Radiador de ${aioSize}mm no compatible. Gabinete soporta hasta ${maxSupportedSize}mm`,
+        ['cooler', 'case']
+      );
+    }
+
+    // If case has general water cooling support but no specific sizes
+    if (supportsWaterCooling) {
+      return createResult(
+        'cooler-case-watercooling',
+        'warn',
+        `Gabinete soporta water cooling, pero no se pudo verificar el tamaño del radiador (${aioSize}mm). Verificá manualmente.`,
+        ['cooler', 'case']
+      );
+    }
+
+    // Case doesn't mention water cooling support
+    return createResult(
+      'cooler-case-watercooling',
+      'fail',
+      `Gabinete no indica soporte para water cooling/AIO. El radiador de ${aioSize}mm podría no ser compatible.`,
+      ['cooler', 'case']
+    );
+  },
+};
+
+/**
+ * Case ↔ Cooler Water Cooling Support (reverse direction)
+ */
+const caseCoolerWaterCoolingRule: CompatibilityRule = {
+  id: 'case-cooler-watercooling',
+  name: 'Case/Cooler Water Cooling',
+  description: 'El gabinete debe soportar el radiador del cooler AIO',
+  sourceCategory: 'case',
+  targetCategories: ['cooler'],
+  evaluate: (candidate, build) => {
+    const cooler = build.get('cooler');
+    if (!cooler) {
+      return createResult(
+        'case-cooler-watercooling',
+        'pass',
+        'No hay cooler seleccionado',
+        ['case', 'cooler']
+      );
+    }
+
+    // Only check if cooler is AIO
+    if (cooler.spec.coolerType !== 'aio') {
+      return createResult(
+        'case-cooler-watercooling',
+        'pass',
+        '', // Not an AIO, so this rule doesn't apply
+        ['case', 'cooler']
+      );
+    }
+
+    const aioSize = cooler.spec.aioSize;
+    const supportsWaterCooling = candidate.spec.supportsWaterCooling;
+    const supportedRadiatorSizes = candidate.spec.supportedRadiatorSizes;
+
+    // If we can't determine AIO size, warn user
+    if (!aioSize) {
+      return createResult(
+        'case-cooler-watercooling',
+        'warn',
+        'No se pudo determinar el tamaño del radiador del AIO. Verificá manualmente.',
+        ['case', 'cooler']
+      );
+    }
+
+    // If case explicitly supports water cooling with specific sizes
+    if (supportedRadiatorSizes && supportedRadiatorSizes.length > 0) {
+      // Find the maximum supported radiator size
+      const maxSupportedSize = Math.max(...supportedRadiatorSizes);
+      
+      // Check if AIO size is less than or equal to max supported size
+      // Logic: If case supports 240mm, it also supports 120mm and 140mm (smaller radiators)
+      if (aioSize <= maxSupportedSize) {
+        return createResult(
+          'case-cooler-watercooling',
+          'pass',
+          `Gabinete soporta radiador de ${aioSize}mm (máximo: ${maxSupportedSize}mm)`,
+          ['case', 'cooler']
+        );
+      }
+      
+      return createResult(
+        'case-cooler-watercooling',
+        'fail',
+        `Gabinete no soporta radiador de ${aioSize}mm. Soporta hasta ${maxSupportedSize}mm`,
+        ['case', 'cooler']
+      );
+    }
+
+    // If case has general water cooling support but no specific sizes
+    if (supportsWaterCooling) {
+      return createResult(
+        'case-cooler-watercooling',
+        'warn',
+        `Gabinete soporta water cooling, pero no se pudo verificar compatibilidad con radiador de ${aioSize}mm. Verificá manualmente.`,
+        ['case', 'cooler']
+      );
+    }
+
+    // Case doesn't mention water cooling support
+    return createResult(
+      'case-cooler-watercooling',
+      'fail',
+      `Gabinete no indica soporte para water cooling/AIO. El radiador de ${aioSize}mm podría no ser compatible.`,
+      ['case', 'cooler']
+    );
+  },
+};
+
+/**
+ * Storage ↔ Motherboard M.2 Slots Compatibility
+ * Checks if the storage device uses M.2 and if the motherboard has M.2 slots
+ */
+const storageMotherboardM2Rule: CompatibilityRule = {
+  id: 'storage-mobo-m2',
+  name: 'Storage/Motherboard M.2',
+  description: 'Los dispositivos M.2 requieren slots M.2 en la motherboard',
+  sourceCategory: 'storage',
+  targetCategories: ['motherboard'],
+  evaluate: (candidate, build) => {
+    const mobo = build.get('motherboard');
+    if (!mobo) {
+      return createResult(
+        'storage-mobo-m2',
+        'pass',
+        'No hay motherboard seleccionada',
+        ['storage', 'motherboard']
+      );
+    }
+
+    const storageConnectionType = candidate.spec.storageConnectionType;
+    
+    // Only check if storage is M.2
+    if (storageConnectionType !== 'M.2') {
+      return createResult(
+        'storage-mobo-m2',
+        'pass',
+        '', // Not M.2, so this rule doesn't apply
+        ['storage', 'motherboard']
+      );
+    }
+
+    const m2Slots = mobo.spec.m2Slots;
+
+    if (!m2Slots || m2Slots === 0) {
+      return createResult(
+        'storage-mobo-m2',
+        'fail',
+        'La motherboard no tiene slots M.2 disponibles. Este disco M.2 no es compatible.',
+        ['storage', 'motherboard']
+      );
+    }
+
+    return createResult(
+      'storage-mobo-m2',
+      'pass',
+      `Motherboard tiene ${m2Slots} slot(s) M.2`,
+      ['storage', 'motherboard']
+    );
+  },
+};
+
+/**
+ * Motherboard ↔ Storage M.2 Compatibility
+ * Checks if the motherboard has M.2 slots for M.2 storage devices
+ */
+const motherboardStorageM2Rule: CompatibilityRule = {
+  id: 'mobo-storage-m2',
+  name: 'Motherboard/Storage M.2',
+  description: 'La motherboard debe tener slots M.2 para dispositivos M.2',
+  sourceCategory: 'motherboard',
+  targetCategories: ['storage'],
+  evaluate: (candidate, build) => {
+    const storage = build.get('storage');
+    if (!storage) {
+      return createResult(
+        'mobo-storage-m2',
+        'pass',
+        'No hay almacenamiento seleccionado',
+        ['motherboard', 'storage']
+      );
+    }
+
+    const storageConnectionType = storage.spec.storageConnectionType;
+    
+    // Only check if storage is M.2
+    if (storageConnectionType !== 'M.2') {
+      return createResult(
+        'mobo-storage-m2',
+        'pass',
+        '', // Not M.2, so this rule doesn't apply
+        ['motherboard', 'storage']
+      );
+    }
+
+    const m2Slots = candidate.spec.m2Slots;
+
+    if (!m2Slots || m2Slots === 0) {
+      return createResult(
+        'mobo-storage-m2',
+        'fail',
+        'La motherboard no tiene slots M.2. El almacenamiento M.2 seleccionado no es compatible.',
+        ['motherboard', 'storage']
+      );
+    }
+
+    return createResult(
+      'mobo-storage-m2',
+      'pass',
+      `Motherboard soporta ${m2Slots} disco(s) M.2`,
+      ['motherboard', 'storage']
+    );
+  },
+};
+
+/**
  * All compatibility rules
  */
 export const COMPATIBILITY_RULES: CompatibilityRule[] = [
@@ -902,6 +1185,10 @@ export const COMPATIBILITY_RULES: CompatibilityRule[] = [
   psuPowerRule,
   coolerCpuSocketRule,
   coolerCaseClearanceRule,
+  coolerCaseWaterCoolingRule, // Validate AIO cooler radiator size against case
+  caseCoolerWaterCoolingRule, // Validate case water cooling support against AIO cooler
+  storageMotherboardM2Rule, // Validate M.2 storage against motherboard
+  motherboardStorageM2Rule, // Validate motherboard M.2 slots against storage
 ];
 
 /**

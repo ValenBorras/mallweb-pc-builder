@@ -28,6 +28,7 @@ export interface ProductSpec {
   maxMemory?: number;        // GB
   memorySlots?: number;
   m2Slots?: number;
+  sataPorts?: number;        // Number of SATA ports for storage
   pciExpressVersion?: string; // e.g., "4.0", "5.0"
 
   // RAM specs
@@ -53,6 +54,8 @@ export interface ProductSpec {
   drivesBays35?: number;     // 3.5" drive bays
   includesPsu?: boolean;     // Whether case includes a PSU
   includedPsuWattage?: number; // Wattage of included PSU (if any)
+  supportsWaterCooling?: boolean; // Whether case supports water cooling/AIO radiators
+  supportedRadiatorSizes?: number[]; // Supported radiator sizes in mm (e.g., [120, 240, 280, 360])
 
   // PSU specs
   psuWattage?: number;       // Watts
@@ -66,6 +69,7 @@ export interface ProductSpec {
   storageCapacity?: number;  // GB
   storageFormFactor?: string; // "2.5", "3.5", "M.2"
   storageType?: string;      // "SSD", "HDD"
+  storageConnectionType?: 'M.2' | 'SATA'; // Connection type for motherboard compatibility
   readSpeed?: number;        // MB/s
   writeSpeed?: number;       // MB/s
 

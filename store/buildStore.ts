@@ -183,18 +183,21 @@ export const useBuildStore = create<BuildState>()(
           const newMotherboardSlots = productWithSpec.spec.memorySlots ?? 4; // Default to 4 if not specified
           const currentRam = get().parts.ram;
           
+          let ramAdjusted = false;
+          let adjustedRam: ProductWithQuantity[] = [];
+          
           if (Array.isArray(currentRam) && currentRam.length > 0) {
             // Count total RAM sticks
             const totalRamSticks = currentRam.reduce((sum, item) => sum + item.quantity, 0);
             
             // If current RAM exceeds new motherboard's slots
             if (totalRamSticks > newMotherboardSlots) {
+              ramAdjusted = true;
               if (typeof window !== 'undefined') {
                 alert(`La nueva motherboard tiene ${newMotherboardSlots} slots de RAM, pero tienes ${totalRamSticks} módulos. Se ajustará automáticamente.`);
               }
               
               // Adjust RAM to fit within new slot count
-              const adjustedRam: ProductWithQuantity[] = [];
               let slotsUsed = 0;
               
               for (const ramItem of currentRam) {
@@ -210,18 +213,94 @@ export const useBuildStore = create<BuildState>()(
                   slotsUsed += quantityToKeep;
                 }
               }
-              
-              // Set the motherboard and adjusted RAM
-              set((state) => ({
-                parts: {
-                  ...state.parts,
-                  motherboard: productWithSpec,
-                  ram: adjustedRam,
-                },
-              }));
-              
-              return;
+            } else {
+              adjustedRam = currentRam;
             }
+          }
+          
+          // Also adjust Storage if it exceeds new slot/port count
+          const newM2Slots = productWithSpec.spec.m2Slots ?? 1;
+          const newSataPorts = productWithSpec.spec.sataPorts ?? 4;
+          const currentStorage = get().parts.storage;
+          
+          let storageAdjusted = false;
+          let adjustedStorage: ProductWithQuantity[] = [];
+          
+          if (Array.isArray(currentStorage) && currentStorage.length > 0) {
+            // Separate M.2 and SATA storage
+            const m2Storage = currentStorage.filter(item => item.product.spec.storageConnectionType === 'M.2');
+            const sataStorage = currentStorage.filter(item => item.product.spec.storageConnectionType === 'SATA');
+            
+            // Count totals
+            const totalM2 = m2Storage.reduce((sum, item) => sum + item.quantity, 0);
+            const totalSata = sataStorage.reduce((sum, item) => sum + item.quantity, 0);
+            
+            // Check if adjustment is needed
+            const m2NeedsAdjustment = totalM2 > newM2Slots;
+            const sataNeedsAdjustment = totalSata > newSataPorts;
+            
+            if (m2NeedsAdjustment || sataNeedsAdjustment) {
+              storageAdjusted = true;
+              const messages: string[] = [];
+              
+              if (m2NeedsAdjustment) {
+                messages.push(`${newM2Slots} slot(s) M.2 (tienes ${totalM2} disco(s))`);
+              }
+              if (sataNeedsAdjustment) {
+                messages.push(`${newSataPorts} puerto(s) SATA (tienes ${totalSata} disco(s))`);
+              }
+              
+              if (typeof window !== 'undefined') {
+                alert(`La nueva motherboard tiene ${messages.join(' y ')}. El almacenamiento se ajustará automáticamente.`);
+              }
+              
+              // Adjust M.2 storage
+              let m2SlotsUsed = 0;
+              for (const storageItem of m2Storage) {
+                const slotsAvailable = newM2Slots - m2SlotsUsed;
+                if (slotsAvailable <= 0) break;
+                
+                const quantityToKeep = Math.min(storageItem.quantity, slotsAvailable);
+                if (quantityToKeep > 0) {
+                  adjustedStorage.push({
+                    ...storageItem,
+                    quantity: quantityToKeep,
+                  });
+                  m2SlotsUsed += quantityToKeep;
+                }
+              }
+              
+              // Adjust SATA storage
+              let sataPortsUsed = 0;
+              for (const storageItem of sataStorage) {
+                const portsAvailable = newSataPorts - sataPortsUsed;
+                if (portsAvailable <= 0) break;
+                
+                const quantityToKeep = Math.min(storageItem.quantity, portsAvailable);
+                if (quantityToKeep > 0) {
+                  adjustedStorage.push({
+                    ...storageItem,
+                    quantity: quantityToKeep,
+                  });
+                  sataPortsUsed += quantityToKeep;
+                }
+              }
+            } else {
+              adjustedStorage = currentStorage;
+            }
+          }
+          
+          // Apply changes if either RAM or Storage was adjusted
+          if (ramAdjusted || storageAdjusted) {
+            set((state) => ({
+              parts: {
+                ...state.parts,
+                motherboard: productWithSpec,
+                ram: ramAdjusted ? adjustedRam : state.parts.ram,
+                storage: storageAdjusted ? adjustedStorage : state.parts.storage,
+              },
+            }));
+            return;
           }
         }
         
@@ -552,6 +631,62 @@ export function useMaxRamSlots(): number {
       return motherboard.spec.memorySlots ?? 4; // Default to 4 if not specified
     }
     return 4; // Default to 4 slots if no motherboard selected
+  });
+}
+
+/**
+ * Hook to get the maximum M.2 slots available from the selected motherboard
+ */
+export function useMaxM2Slots(): number {
+  return useBuildStore((state) => {
+    const motherboard = state.parts.motherboard;
+    if (motherboard && !Array.isArray(motherboard)) {
+      return motherboard.spec.m2Slots ?? 1; // Default to 1 if not specified
+    }
+    return 1; // Default to 1 slot if no motherboard selected
+  });
+}
+
+/**
+ * Hook to get the maximum SATA ports available from the selected motherboard
+ */
+export function useMaxSataPorts(): number {
+  return useBuildStore((state) => {
+    const motherboard = state.parts.motherboard;
+    if (motherboard && !Array.isArray(motherboard)) {
+      return motherboard.spec.sataPorts ?? 4; // Default to 4 if not specified
+    }
+    return 4; // Default to 4 ports if no motherboard selected
+  });
+}
+
+/**
+ * Hook to get the total quantity of M.2 storage devices
+ */
+export function useTotalM2Storage(): number {
+  return useBuildStore((state) => {
+    const storage = state.parts.storage;
+    if (Array.isArray(storage)) {
+      return storage
+        .filter(item => item.product.spec.storageConnectionType === 'M.2')
+        .reduce((sum, item) => sum + item.quantity, 0);
+    }
+    return 0;
+  });
+}
+
+/**
+ * Hook to get the total quantity of SATA storage devices
+ */
+export function useTotalSataStorage(): number {
+  return useBuildStore((state) => {
+    const storage = state.parts.storage;
+    if (Array.isArray(storage)) {
+      return storage
+        .filter(item => item.product.spec.storageConnectionType === 'SATA')
+        .reduce((sum, item) => sum + item.quantity, 0);
+    }
+    return 0;
   });
 }
 
