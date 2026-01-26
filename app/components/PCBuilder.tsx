@@ -7,7 +7,7 @@ import { SearchBar } from './SearchBar';
 import { ProductList } from './ProductList';
 import { SubCategoryTabs } from './SubCategoryTabs';
 import { BuildSummary } from './BuildSummary';
-import { useBuildStore, useMaxRamSlots, useCpuIncludesCooler, createIncludedCoolerProduct } from '@/store/buildStore';
+import { useBuildStore, useMaxRamSlots, useMaxStorageSlots, useCpuIncludesCooler, createIncludedCoolerProduct } from '@/store/buildStore';
 import { CATEGORIES, hasSubCategories, getMainCategories, getSubCategories, isGpuRequired, isCoolerRequired, type CategoryKey } from '@/lib/catalog/categories';
 import { getCategoryIcon } from '@/lib/catalog/icons';
 import { filterProductsByCategory } from '@/lib/catalog/filters';
@@ -51,6 +51,7 @@ export function PCBuilder() {
   const selectedPart = parts[activeCategory];
   const category = CATEGORIES[activeCategory];
   const maxRamSlots = useMaxRamSlots();
+  const maxStorageSlots = useMaxStorageSlots();
   const cpuIncludesCooler = useCpuIncludesCooler();
   
   // Determine the parent category and if we should show sub-tabs
@@ -300,15 +301,26 @@ export function PCBuilder() {
         }
       }, 100);
     } 
-    // For Storage, add to array and auto-advance immediately
+    // For Storage, add to array and check if slots are full
     else if (activeCategory === 'storage') {
       addPart(activeCategory, product);
       
-      // Auto-advance to next category
-      const nextCategory = getNextCategory();
-      if (nextCategory) {
-        setActiveCategory(nextCategory);
-      }
+      // Check if we've reached the maximum storage slots after adding
+      // We need to use a timeout to allow the state to update
+      setTimeout(() => {
+        const updatedStorage = useBuildStore.getState().parts.storage;
+        const totalStorageItems = Array.isArray(updatedStorage) 
+          ? updatedStorage.reduce((sum, item) => sum + item.quantity, 0)
+          : 0;
+        
+        if (totalStorageItems >= maxStorageSlots) {
+          // Auto-advance to next category
+          const nextCategory = getNextCategory();
+          if (nextCategory) {
+            setActiveCategory(nextCategory);
+          }
+        }
+      }, 100);
     } 
     // For all other categories, replace and auto-advance
     else {
@@ -338,6 +350,24 @@ export function PCBuilder() {
           : 0;
         
         if (totalRamItems >= maxRamSlots) {
+          // Auto-advance to next category
+          const nextCategory = getNextCategory();
+          if (nextCategory) {
+            setActiveCategory(nextCategory);
+          }
+        }
+      }, 100);
+    }
+    
+    // For Storage, check if we've reached the maximum slots after incrementing
+    if (activeCategory === 'storage') {
+      setTimeout(() => {
+        const updatedStorage = useBuildStore.getState().parts.storage;
+        const totalStorageItems = Array.isArray(updatedStorage) 
+          ? updatedStorage.reduce((sum, item) => sum + item.quantity, 0)
+          : 0;
+        
+        if (totalStorageItems >= maxStorageSlots) {
           // Auto-advance to next category
           const nextCategory = getNextCategory();
           if (nextCategory) {
@@ -614,25 +644,21 @@ function BottomCheckoutBar({
         {/* Desktop: Stacked layout - Total on top, Checkout below */}
         <div className="hidden lg:flex flex-col gap-3 pointer-events-none">
           {/* Total display (non-clickable) */}
-          <div className="w-full p-4 rounded-2xl bg-gray-800 shadow-lg shadow-gray-800/25 flex items-center justify-between pointer-events-auto">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/241_12-10-2022-02-10-45-mallweb.png"
-                alt="Mall Web Logo"
-                width={60}
-                height={24}
-                className="h-6 w-auto object-contain"
-              />
-              <div className="text-left">
-                <div className="text-sm font-medium text-white/90">Tu Build</div>
-                <div className="text-xs text-white/70">{partCount} comp{partCount !== 1 ? 's' : ''}</div>
+          <div className="w-full p-4 rounded-2xl bg-gray-800 shadow-lg shadow-gray-800/25 flex items-center gap-3 pointer-events-auto">
+            <Image
+              src="/241_12-10-2022-02-10-45-mallweb.png"
+              alt="Mall Web Logo"
+              width={60}
+              height={24}
+              className="h-6 w-auto object-contain shrink-0"
+            />
+            <div className="flex-1 text-left">
+              <div className="text-sm font-medium text-white/90">
+                Tu Build - {partCount} comp{partCount !== 1 ? 's' : ''}
               </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xl font-bold text-white whitespace-nowrap">
-                ${totalPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              <div className="text-base font-bold text-white whitespace-nowrap">
+                ${totalPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })} <span className="text-xs text-white/70 font-normal">ARS</span>
               </div>
-              <div className="text-xs text-white/70">ARS</div>
             </div>
           </div>
 

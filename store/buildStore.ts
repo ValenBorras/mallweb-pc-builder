@@ -661,6 +661,21 @@ export function useMaxSataPorts(): number {
 }
 
 /**
+ * Hook to get the maximum total storage slots available (M.2 + SATA) from the selected motherboard
+ */
+export function useMaxStorageSlots(): number {
+  return useBuildStore((state) => {
+    const motherboard = state.parts.motherboard;
+    if (motherboard && !Array.isArray(motherboard)) {
+      const m2Slots = motherboard.spec.m2Slots ?? 1;
+      const sataPorts = motherboard.spec.sataPorts ?? 4;
+      return m2Slots + sataPorts; // Total storage slots
+    }
+    return 5; // Default to 5 slots (1 M.2 + 4 SATA) if no motherboard selected
+  });
+}
+
+/**
  * Hook to get the total quantity of M.2 storage devices
  */
 export function useTotalM2Storage(): number {
