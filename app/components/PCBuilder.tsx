@@ -178,10 +178,13 @@ export function PCBuilder() {
     };
 
     let rafId: number | null = null;
+    const STICKY_DELAY_PX = 70;
+
     const updateSticky = () => {
       if (mobileSelectorTopRef.current === null) return;
       const headerOffset = getHeaderOffset();
-      const shouldStick = window.scrollY + headerOffset > mobileSelectorTopRef.current;
+      const shouldStick =
+        window.scrollY + headerOffset > mobileSelectorTopRef.current + STICKY_DELAY_PX;
       setIsMobileCategorySticky(shouldStick);
     };
 
