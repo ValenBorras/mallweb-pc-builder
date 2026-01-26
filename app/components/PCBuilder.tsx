@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { CategorySelector } from './CategorySelector';
 import { SearchBar } from './SearchBar';
@@ -41,6 +41,12 @@ export function PCBuilder() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showIncompatible, setShowIncompatible] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
+  const [isMobileCategorySticky, setIsMobileCategorySticky] = useState(false);
+  const [mobileSelectorHeight, setMobileSelectorHeight] = useState(0);
+  const headerRef = useRef<HTMLElement | null>(null);
+  const mobileSelectorRef = useRef<HTMLDivElement | null>(null);
+  const mobileSelectorPlaceholderRef = useRef<HTMLDivElement | null>(null);
+  const mobileSelectorTopRef = useRef<number | null>(null);
 
   const selectedPart = parts[activeCategory];
   const category = CATEGORIES[activeCategory];
@@ -157,6 +163,57 @@ export function PCBuilder() {
     performSearch('', 1);
   }, [activeCategory, performSearch]);
 
+  useEffect(() => {
+    const selector = mobileSelectorRef.current;
+    const placeholder = mobileSelectorPlaceholderRef.current;
+    if (!selector || !placeholder) return;
+
+    const getHeaderOffset = () => headerRef.current?.offsetHeight ?? 56;
+
+    const measure = () => {
+      const headerOffset = getHeaderOffset();
+      mobileSelectorTopRef.current = placeholder.getBoundingClientRect().top + window.scrollY;
+      const height = selector.offsetHeight;
+      setMobileSelectorHeight(height);
+    };
+
+    let rafId: number | null = null;
+    const updateSticky = () => {
+      if (mobileSelectorTopRef.current === null) return;
+      const headerOffset = getHeaderOffset();
+      const shouldStick = window.scrollY + headerOffset > mobileSelectorTopRef.current;
+      setIsMobileCategorySticky(shouldStick);
+    };
+
+    const onScroll = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        updateSticky();
+      });
+    };
+
+    const onResize = () => {
+      measure();
+      updateSticky();
+    };
+
+    measure();
+    updateSticky();
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
+
+    return () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+    };
+  }, []);
+
+
   const handleSearch = (query: string) => {
     performSearch(query, 1);
   };
@@ -186,56 +243,35 @@ export function PCBuilder() {
     return searchResults.totalPages;
   };
 
-  // Get next required category that doesn't have a part selected
-  const getNextRequiredCategory = (): CategoryKey | null => {
+  // Get next category in order (regardless of whether it's required or already has a part)
+  const getNextCategory = (): CategoryKey | null => {
+    const currentCategory = CATEGORIES[activeCategory];
+    
+    // Special handling for peripherals sub-categories
+    if (currentCategory.parentCategory === 'peripherals') {
+      const parentCategory = CATEGORIES['peripherals'];
+      const subCategories = parentCategory.subCategories || [];
+      const currentSubIndex = subCategories.findIndex(key => key === activeCategory);
+      
+      // If there's a next sub-category, return it
+      if (currentSubIndex >= 0 && currentSubIndex < subCategories.length - 1) {
+        return subCategories[currentSubIndex + 1];
+      }
+      
+      // If we're at the last sub-category, return null (don't advance)
+      return null;
+    }
+    
+    // For main categories, return the next category in the list
     const mainCategories = getMainCategories();
     const currentIndex = mainCategories.findIndex(cat => cat.key === activeCategory);
     
-    // Check categories after current one
-    for (let i = currentIndex + 1; i < mainCategories.length; i++) {
-      const cat = mainCategories[i];
-      const part = parts[cat.key];
-      const hasPart = Array.isArray(part) ? part.length > 0 : part !== null;
-      
-      // Check if category is required
-      let isRequired = cat.required;
-      if (cat.key === 'gpu') {
-        const cpuPart = parts.cpu;
-        const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
-        isRequired = isGpuRequired(cpuHasGraphics);
-      } else if (cat.key === 'cooler') {
-        const cpuPart = parts.cpu;
-        const cpuHasCooler = !Array.isArray(cpuPart) && cpuPart?.spec.includesCooler;
-        isRequired = isCoolerRequired(cpuHasCooler);
-      }
-      
-      if (isRequired && !hasPart) {
-        return cat.key;
-      }
+    // Simply return the next category in the list
+    if (currentIndex >= 0 && currentIndex < mainCategories.length - 1) {
+      return mainCategories[currentIndex + 1].key;
     }
     
-    // If no category found after current, check from beginning
-    for (let i = 0; i < currentIndex; i++) {
-      const cat = mainCategories[i];
-      const part = parts[cat.key];
-      const hasPart = Array.isArray(part) ? part.length > 0 : part !== null;
-      
-      let isRequired = cat.required;
-      if (cat.key === 'gpu') {
-        const cpuPart = parts.cpu;
-        const cpuHasGraphics = !Array.isArray(cpuPart) && cpuPart?.spec.integratedGraphics;
-        isRequired = isGpuRequired(cpuHasGraphics);
-      } else if (cat.key === 'cooler') {
-        const cpuPart = parts.cpu;
-        const cpuHasCooler = !Array.isArray(cpuPart) && cpuPart?.spec.includesCooler;
-        isRequired = isCoolerRequired(cpuHasCooler);
-      }
-      
-      if (isRequired && !hasPart) {
-        return cat.key;
-      }
-    }
-    
+    // If we're at the last category, return null (don't loop back)
     return null;
   };
 
@@ -253,8 +289,8 @@ export function PCBuilder() {
           : 0;
         
         if (totalRamItems >= maxRamSlots) {
-          // Auto-advance to next required category
-          const nextCategory = getNextRequiredCategory();
+          // Auto-advance to next category
+          const nextCategory = getNextCategory();
           if (nextCategory) {
             setActiveCategory(nextCategory);
           }
@@ -265,8 +301,8 @@ export function PCBuilder() {
     else if (activeCategory === 'storage') {
       addPart(activeCategory, product);
       
-      // Auto-advance to next required category
-      const nextCategory = getNextRequiredCategory();
+      // Auto-advance to next category
+      const nextCategory = getNextCategory();
       if (nextCategory) {
         setActiveCategory(nextCategory);
       }
@@ -275,8 +311,8 @@ export function PCBuilder() {
     else {
       setPart(activeCategory, product);
       
-      // Auto-advance to next required category
-      const nextCategory = getNextRequiredCategory();
+      // Auto-advance to next category
+      const nextCategory = getNextCategory();
       if (nextCategory) {
         setActiveCategory(nextCategory);
       }
@@ -299,8 +335,8 @@ export function PCBuilder() {
           : 0;
         
         if (totalRamItems >= maxRamSlots) {
-          // Auto-advance to next required category
-          const nextCategory = getNextRequiredCategory();
+          // Auto-advance to next category
+          const nextCategory = getNextCategory();
           if (nextCategory) {
             setActiveCategory(nextCategory);
           }
@@ -316,7 +352,7 @@ export function PCBuilder() {
   return (
     <div className="min-h-screen bg-slate-100">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-gray-900/95 border-b border-gray-800">
+      <header ref={headerRef} className="sticky top-0 z-50 backdrop-blur-xl bg-gray-900/95 border-b border-gray-800">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
@@ -353,8 +389,53 @@ export function PCBuilder() {
         </div>
       </header>
 
+      {/* Mobile sticky category selector */}
+      <div
+        ref={mobileSelectorPlaceholderRef}
+        className="lg:hidden w-full"
+        style={{ height: isMobileCategorySticky ? mobileSelectorHeight : 0 }}
+        aria-hidden="true"
+      />
+      <div
+        ref={mobileSelectorRef}
+        className={`lg:hidden w-full px-4 sm:px-6 py-4 transition-[background-color,box-shadow,backdrop-filter,transform] duration-200 ease-out will-change-transform ${
+          isMobileCategorySticky
+            ? 'fixed left-0 right-0 z-40 bg-gradient-to-b from-slate-100/95 via-slate-100/85 to-slate-100/70 backdrop-blur-sm shadow-sm animate-[slide-down_180ms_ease-out]'
+            : 'relative z-30'
+        }`}
+        style={isMobileCategorySticky ? { top: 0 } : undefined}
+      >
+        <div className="max-w-[1600px] mx-auto">
+          <button
+            onClick={() => setShowCategories(true)}
+            className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-white border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 transition-all active:scale-98 shadow-md"
+          >
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              {(() => {
+                const IconComponent = getCategoryIcon(parentCategory);
+                return <IconComponent className="w-7 h-7 text-red-600 shrink-0" />;
+              })()}
+              <div className="text-left flex-1 min-w-0">
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Categoría</div>
+                <h2 className="text-base font-bold text-gray-900 truncate">{effectiveCategory.name}</h2>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {partCount > 0 && (
+                <div className="px-2 py-1 rounded-full bg-red-100 text-red-600 text-xs font-semibold">
+                  {partCount}
+                </div>
+              )}
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+        </div>
+      </div>
+
       {/* Main content */}
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8 pb-36 md:pb-40 lg:pb-40">
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 lg:py-8 pb-24 lg:pb-40">
         <div className="flex gap-6 lg:gap-8">
           {/* Left sidebar - Categories */}
           <aside className="w-64 xl:w-72 shrink-0 hidden lg:block">
@@ -380,35 +461,6 @@ export function PCBuilder() {
                   <p className="text-sm text-gray-600 mt-1">{effectiveCategory.description}</p>
                 </div>
               </div>
-            </div>
-
-            {/* Mobile category header with button to open categories */}
-            <div className="mb-4 lg:hidden">
-              <button
-                onClick={() => setShowCategories(true)}
-                className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-white border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 transition-all active:scale-98"
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  {(() => {
-                    const IconComponent = getCategoryIcon(parentCategory);
-                    return <IconComponent className="w-7 h-7 text-red-600 shrink-0" />;
-                  })()}
-                  <div className="text-left flex-1 min-w-0">
-                    <div className="text-xs text-gray-500 uppercase tracking-wide">Categoría</div>
-                    <h2 className="text-base font-bold text-gray-900 truncate">{effectiveCategory.name}</h2>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {partCount > 0 && (
-                    <div className="px-2 py-1 rounded-full bg-red-100 text-red-600 text-xs font-semibold">
-                      {partCount}
-                    </div>
-                  )}
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </button>
             </div>
 
             {/* Sub-category tabs - Show before SearchBar */}
@@ -514,28 +566,70 @@ function BottomCheckoutBar({
 
       {/* Bottom bar */}
       <div className="w-full lg:w-64 xl:w-72">
-        {/* Stacked layout - Total on top, Checkout below */}
-        <div className="flex flex-col gap-2 md:gap-3 bg-gradient-to-t from-slate-100 via-slate-100 to-slate-100/80 lg:from-transparent lg:via-transparent lg:to-transparent pt-6 pb-2 lg:pt-0 lg:pb-0 pointer-events-none">
+        {/* Mobile: Single compact button */}
+        <div className="lg:hidden  pt-6 pb-2 pointer-events-none">
+          <button
+            onClick={() => setShowSummary(true)}
+            disabled={partCount === 0}
+            className={`
+              w-full p-3 rounded-xl font-bold text-sm transition-all pointer-events-auto shadow-lg flex items-center justify-between
+              ${canCheckout
+                ? 'bg-gray-800 text-white hover:bg-gray-700 shadow-gray-500/25 hover:shadow-xl hover:shadow-gray-500/30'
+                : partCount > 0
+                  ? 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-yellow-500/25'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }
+            `}
+          >
+            <div className="flex items-center gap-2">
+              <Image
+                src="/241_12-10-2022-02-10-45-mallweb.png"
+                alt="Mall Web Logo"
+                width={50}
+                height={20}
+                className="h-4 w-auto object-contain"
+              />
+              <span>
+                {partCount === 0 ? (
+                  'Agregá componentes'
+                ) : canCheckout ? (
+                  'Finalizar Compra'
+                ) : (
+                  'Ver Build'
+                )}
+              </span>
+            </div>
+            <div className="text-right">
+              <div className="text-base font-bold whitespace-nowrap">
+                ${totalPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-[9px] opacity-80">ARS</div>
+            </div>
+          </button>
+        </div>
+
+        {/* Desktop: Stacked layout - Total on top, Checkout below */}
+        <div className="hidden lg:flex flex-col gap-3 pointer-events-none">
           {/* Total display (non-clickable) */}
-          <div className="w-full p-3 md:p-4 rounded-xl md:rounded-2xl bg-gray-800 shadow-lg shadow-gray-800/25 flex items-center justify-between pointer-events-auto">
-            <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-full p-4 rounded-2xl bg-gray-800 shadow-lg shadow-gray-800/25 flex items-center justify-between pointer-events-auto">
+            <div className="flex items-center gap-3">
               <Image
                 src="/241_12-10-2022-02-10-45-mallweb.png"
                 alt="Mall Web Logo"
                 width={60}
                 height={24}
-                className="h-5 md:h-6 w-auto object-contain"
+                className="h-6 w-auto object-contain"
               />
               <div className="text-left">
-                <div className="text-xs md:text-sm font-medium text-white/90">Tu Build</div>
-                <div className="text-[10px] md:text-xs text-white/70">{partCount} comp{partCount !== 1 ? 's' : ''}</div>
+                <div className="text-sm font-medium text-white/90">Tu Build</div>
+                <div className="text-xs text-white/70">{partCount} comp{partCount !== 1 ? 's' : ''}</div>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-lg md:text-xl font-bold text-white whitespace-nowrap">
+              <div className="text-xl font-bold text-white whitespace-nowrap">
                 ${totalPrice.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-[10px] md:text-xs text-white/70">ARS</div>
+              <div className="text-xs text-white/70">ARS</div>
             </div>
           </div>
 
@@ -544,7 +638,7 @@ function BottomCheckoutBar({
             onClick={() => setShowSummary(true)}
             disabled={partCount === 0}
             className={`
-              w-full p-3 md:p-4 rounded-xl md:rounded-2xl font-bold text-sm md:text-base transition-all pointer-events-auto
+              w-full p-4 rounded-2xl font-bold text-base transition-all pointer-events-auto
               ${canCheckout
                 ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30'
                 : partCount > 0
@@ -556,11 +650,11 @@ function BottomCheckoutBar({
             {partCount === 0 ? (
               'Agregá componentes'
             ) : canCheckout ? (
-              <span className="flex items-center justify-center gap-1.5 md:gap-2">
+              <span className="flex items-center justify-center gap-2">
                 🛒 Finalizar Compra
               </span>
             ) : (
-              <span className="flex items-center justify-center gap-1.5 md:gap-2">
+              <span className="flex items-center justify-center gap-2">
                 📋 Ver Build
               </span>
             )}

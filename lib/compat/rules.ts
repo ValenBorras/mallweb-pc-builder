@@ -793,6 +793,16 @@ const coolerCpuSocketRule: CompatibilityRule = {
       );
     }
 
+    // Special case: If this is the "use included cooler" option, it's automatically compatible
+    if (candidate.product.id === '__use_included_cooler__') {
+      return createResult(
+        'cooler-cpu-socket',
+        'pass',
+        'Cooler incluido con CPU (compatible)',
+        ['cooler', 'cpu']
+      );
+    }
+
     const coolerSockets = candidate.spec.coolerSockets;
     const cpuSocket = cpu.spec.socket;
 
@@ -839,6 +849,17 @@ const coolerCaseClearanceRule: CompatibilityRule = {
         'cooler-case-clearance',
         'pass',
         'No hay gabinete seleccionado',
+        ['cooler', 'case']
+      );
+    }
+
+    // Special case: If this is the "use included cooler" option, it's automatically compatible
+    // CPU included coolers are designed to fit in standard cases
+    if (candidate.product.id === '__use_included_cooler__') {
+      return createResult(
+        'cooler-case-clearance',
+        'pass',
+        'Cooler incluido con CPU (compatible)',
         ['cooler', 'case']
       );
     }
@@ -895,6 +916,16 @@ const coolerCaseWaterCoolingRule: CompatibilityRule = {
   sourceCategory: 'cooler',
   targetCategories: ['case'],
   evaluate: (candidate, build) => {
+    // Special case: If this is the "use included cooler" option, it's automatically compatible
+    if (candidate.product.id === '__use_included_cooler__') {
+      return createResult(
+        'cooler-case-watercooling',
+        'pass',
+        '', // Included coolers are not AIO, so this rule doesn't apply
+        ['cooler', 'case']
+      );
+    }
+
     // Only check if cooler is AIO (water cooling)
     if (candidate.spec.coolerType !== 'aio') {
       return createResult(
@@ -989,6 +1020,16 @@ const caseCoolerWaterCoolingRule: CompatibilityRule = {
         'case-cooler-watercooling',
         'pass',
         'No hay cooler seleccionado',
+        ['case', 'cooler']
+      );
+    }
+
+    // Special case: If this is the "use included cooler" option, it's automatically compatible
+    if (cooler.product.id === '__use_included_cooler__') {
+      return createResult(
+        'case-cooler-watercooling',
+        'pass',
+        '', // Included coolers are not AIO, so this rule doesn't apply
         ['case', 'cooler']
       );
     }

@@ -165,7 +165,7 @@ export function CheckoutModal({
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Finalizar Compra</h2>
               <p className="text-sm text-gray-600 mt-1">
-                Total: <span className="font-bold text-red-600">${totalAmount.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span> USD
+                Total: <span className="font-bold text-red-600">${totalAmount.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span> ARS
               </p>
             </div>
             {!isProcessing && (

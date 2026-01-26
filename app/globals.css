@@ -118,6 +118,17 @@ img {
   animation: spin 1s linear infinite;
 }
 
+@keyframes slide-down {
+  from {
+    transform: translateY(-6px);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* Hide scrollbar for Chrome, Safari and Opera */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
