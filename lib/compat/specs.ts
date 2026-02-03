@@ -128,9 +128,10 @@ function extractPattern(
   text: string,
   patterns: Record<string, RegExp[]>
 ): string | undefined {
+  const normText = expandSocketPrefixes(text);
   for (const [value, regexList] of Object.entries(patterns)) {
     for (const regex of regexList) {
-      if (regex.test(text)) {
+      if (regex.test(normText)) {
         return value;
       }
     }
@@ -146,15 +147,33 @@ function extractPatterns(
   patterns: Record<string, RegExp[]>
 ): string[] {
   const matches: string[] = [];
+  const normText = expandSocketPrefixes(text);
   for (const [value, regexList] of Object.entries(patterns)) {
     for (const regex of regexList) {
-      if (regex.test(text)) {
+      if (regex.test(normText)) {
         matches.push(value);
         break;
       }
     }
   }
   return matches;
+}
+
+/**
+ * Expand socket prefixes that are shared across a list.
+ * Example: "LGA 1851 / 1700 / 1200" => "LGA 1851 / LGA 1700 / LGA 1200"
+ */
+function expandSocketPrefixes(text: string): string {
+  if (!text) return text;
+
+  // Handles patterns like "LGA 1851 / 1700 / 1200 / 115X"
+  const re = /((?:\bLGA\b|\bFCLGA\b|\bSocket\b)\s*)(\d{2,4}[A-Za-z0-9]*?(?:\s*(?:\/|,)\s*\d{2,4}[A-Za-z0-9]*)+)/gi;
+
+  return text.replace(re, (match, prefix, list) => {
+    const parts = list.split(/(?:\/|,)/).map(p => p.trim()).filter(Boolean);
+    const expanded = parts.map(p => `${prefix}${p}`).join(' / ');
+    return expanded;
+  });
 }
 
 /**

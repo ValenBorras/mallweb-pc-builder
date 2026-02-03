@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import type { Product } from '@/lib/mallweb/normalize';
 
@@ -37,7 +38,7 @@ export function ProductModal({
     }
   };
 
-  return (
+  const modalContent = (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm pointer-events-auto"
       onClick={handleBackdropClick}
@@ -265,9 +266,13 @@ export function ProductModal({
               )}
             </div>
           </div>
-        </div>
       </div>
     </div>
+  </div>
   );
+
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(modalContent, document.body);
 }
 
