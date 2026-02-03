@@ -179,13 +179,16 @@ const FILTER_RULES: Record<CategoryKey, CategoryFilterRules> = {
     titleExcludePatterns: [],
   },
   mouse: {
-    // Match: "Perifericos de PC - Mouse"
+    // Match: "Perifericos de PC - Mouse", "Zona gamer", "Mouse Gamer"
     includePatterns: [
       /perifericos?\s+de\s+pc/i,
+      /zona\s+gamer/i,
+      /mouse\s+gamer/i,
     ],
     excludePatterns: [
       /combo/i,
       /kit/i,
+      /pad\s+mouse/i,
     ],
     titleExcludePatterns: [
       /auricular/i,
@@ -199,9 +202,10 @@ const FILTER_RULES: Record<CategoryKey, CategoryFilterRules> = {
     ],
   },
   headphones: {
-    // Match: "Perifericos de PC - Auriculares"
+    // Match: "Perifericos de PC - Auriculares", "Zona gamer"
     includePatterns: [
       /perifericos?\s+de\s+pc/i,
+      /zona\s+gamer/i,
     ],
     excludePatterns: [
       /combo/i,
@@ -219,9 +223,11 @@ const FILTER_RULES: Record<CategoryKey, CategoryFilterRules> = {
     ],
   },
   keyboard: {
-    // Match: "Perifericos de PC - Teclado"
+    // Match: "Perifericos de PC - Teclado", "Zona gamer", "Teclado Gamer"
     includePatterns: [
       /perifericos?\s+de\s+pc/i,
+      /zona\s+gamer/i,
+      /teclado\s+gamer/i,
     ],
     excludePatterns: [
       /combo/i,
@@ -260,9 +266,13 @@ const FILTER_RULES: Record<CategoryKey, CategoryFilterRules> = {
     ],
   },
   peripherals: {
-    // Match: All "Perifericos de PC"
+    // Match: All "Perifericos de PC", "Zona gamer"
     includePatterns: [
       /perifericos?\s+de\s+pc/i,
+      /zona\s+gamer/i,
+      /mouse\s+gamer/i,
+      /teclado\s+gamer/i,
+      /pad\s+mouse\s+gamer/i,
     ],
     excludePatterns: [
       /combo/i,

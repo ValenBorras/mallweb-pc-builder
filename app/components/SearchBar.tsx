@@ -18,26 +18,27 @@ export function SearchBar({ category, onSearch, isLoading = false }: SearchBarPr
   // Reset query when category changes
   useEffect(() => {
     setQuery('');
-  }, [category]);
+    onSearch(''); // Clear search when category changes
+  }, [category, onSearch]);
+
+  // Update search in real-time as user types
+  useEffect(() => {
+    onSearch(query.trim());
+  }, [query, onSearch]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
-      onSearch(query.trim());
-      setShowSuggestions(false);
-    }
+    setShowSuggestions(false);
   };
 
   const handleSuggestionClick = (suggestion: string) => {
     setQuery(suggestion);
-    onSearch(suggestion);
     setShowSuggestions(false);
     inputRef.current?.blur();
   };
 
   const handleClear = () => {
     setQuery('');
-    onSearch('');
     inputRef.current?.focus();
   };
 

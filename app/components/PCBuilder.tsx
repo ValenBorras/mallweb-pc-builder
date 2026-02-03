@@ -15,12 +15,6 @@ import type { Product } from '@/lib/mallweb/normalize';
 import type { CompatibilityResult } from '@/lib/compat/types';
 import { filterByCompatibility } from '@/lib/compat/engine';
 
-interface SearchResult {
-  products: Product[];
-  currentPage: number;
-  totalPages: number;
-}
-
 export function PCBuilder() {
   const activeCategory = useBuildStore((state) => state.activeCategory);
   const setActiveCategory = useBuildStore((state) => state.setActiveCategory);
@@ -34,11 +28,11 @@ export function PCBuilder() {
   const getPartCount = useBuildStore((state) => state.getPartCount);
   const partCount = getPartCount();
 
-  const [searchResults, setSearchResults] = useState<SearchResult | null>(null);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filteredProducts, setFilteredProducts] = useState<Array<{ product: Product; compatibility: CompatibilityResult }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
-  const [currentPage, setCurrentPage] = useState(1);
   const [showIncompatible, setShowIncompatible] = useState(false);
   const [showCategories, setShowCategories] = useState(false);
   const [isMobileCategorySticky, setIsMobileCategorySticky] = useState(false);
@@ -75,58 +69,75 @@ export function PCBuilder() {
     });
   }
 
-  // Search function
-  const performSearch = useCallback(async (query: string, page: number = 1) => {
-    const searchQuery = query || category.searchKeywords[0];
-    
+  // Load products for category
+  const loadCategoryProducts = useCallback(async () => {
     setIsLoading(true);
     setError(undefined);
 
     try {
-      const response = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keywords: searchQuery,
-          page,
-          resultsPerPage: 50, // Fetch more since we filter by category
-        }),
-      });
+      // Load all pages to get comprehensive results
+      let allLoadedProducts: Product[] = [];
+      let currentLoadPage = 1;
+      let hasMorePages = true;
 
-      if (!response.ok) {
+      // Load up to 3 pages to get more comprehensive results (150 products)
+      const MAX_PAGES = 3;
+      
+      while (hasMorePages && currentLoadPage <= MAX_PAGES) {
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            keywords: category.searchKeywords[0],
+            page: currentLoadPage,
+            resultsPerPage: 50,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Error en la búsqueda');
+        }
+
         const data = await response.json();
-        throw new Error(data.error || 'Error en la búsqueda');
+        allLoadedProducts = [...allLoadedProducts, ...data.products];
+        
+        // Check if there are more pages
+        hasMorePages = currentLoadPage < data.totalPages;
+        currentLoadPage++;
       }
 
-      const data = await response.json();
-      setSearchResults({
-        products: data.products,
-        currentPage: data.currentPage,
-        totalPages: data.totalPages,
-      });
-      setCurrentPage(data.currentPage);
+      // Filter by category immediately
+      const categoryFiltered = filterProductsByCategory(allLoadedProducts, activeCategory);
+      setAllProducts(categoryFiltered);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
-      setSearchResults(null);
+      setAllProducts([]);
     } finally {
       setIsLoading(false);
     }
-  }, [category.searchKeywords]);
+  }, [category.searchKeywords, activeCategory]);
 
-  // Filter products by category and compatibility when search results or build changes
+  // Filter products by search query, category and compatibility
   useEffect(() => {
-    if (!searchResults) {
+    if (allProducts.length === 0) {
       setFilteredProducts([]);
       return;
     }
 
-    // First, filter by category rules (include/exclude patterns based on product categories)
-    const categoryFiltered = filterProductsByCategory(searchResults.products, activeCategory);
+    // First, filter by search query (by product name)
+    let searchFiltered = allProducts;
+    if (searchQuery.trim()) {
+      const normalizedQuery = searchQuery.toLowerCase().trim();
+      searchFiltered = allProducts.filter(product => 
+        product.title && product.title.toLowerCase().includes(normalizedQuery)
+      );
+    }
     
     // Then apply compatibility filtering
     const build = getBuild();
     const compatFiltered = filterByCompatibility(
-      categoryFiltered,
+      searchFiltered,
       activeCategory,
       build,
       showIncompatible
@@ -156,13 +167,13 @@ export function PCBuilder() {
     }
     
     setFilteredProducts(sorted);
-  }, [searchResults, activeCategory, parts, showIncompatible, getBuild, cpuIncludesCooler]);
+  }, [allProducts, searchQuery, activeCategory, parts, showIncompatible, getBuild, cpuIncludesCooler]);
 
-  // Load initial products when category changes and reset to page 1
+  // Load initial products when category changes
   useEffect(() => {
-    setCurrentPage(1);
-    performSearch('', 1);
-  }, [activeCategory, performSearch]);
+    setSearchQuery('');
+    loadCategoryProducts();
+  }, [activeCategory, loadCategoryProducts]);
 
   useEffect(() => {
     const selector = mobileSelectorRef.current;
@@ -218,34 +229,9 @@ export function PCBuilder() {
   }, []);
 
 
-  const handleSearch = (query: string) => {
-    performSearch(query, 1);
-  };
-
-  const handlePageChange = (page: number) => {
-    performSearch('', page);
-  };
-
-  // Calculate effective total pages based on filtered products
-  // If we have fewer filtered products than the page size, we're on the last page
-  const effectiveTotalPages = () => {
-    if (!searchResults) return 1;
-    
-    // If we have very few filtered products (less than would fit in one page)
-    // and we're on page 1, don't show pagination
-    const RESULTS_PER_PAGE = 50;
-    if (filteredProducts.length < RESULTS_PER_PAGE && currentPage === 1) {
-      return 1;
-    }
-    
-    // If we're on a page beyond 1 and have no products, we've gone too far
-    if (filteredProducts.length === 0 && currentPage > 1) {
-      return currentPage - 1;
-    }
-    
-    // Otherwise use the API's totalPages
-    return searchResults.totalPages;
-  };
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   // Get next category in order (regardless of whether it's required or already has a part)
   const getNextCategory = (): CategoryKey | null => {
@@ -527,9 +513,9 @@ export function PCBuilder() {
               onDecrementQuantity={handleDecrementQuantity}
               isLoading={isLoading}
               error={error}
-              currentPage={currentPage}
-              totalPages={effectiveTotalPages()}
-              onPageChange={handlePageChange}
+              currentPage={1}
+              totalPages={1}
+              onPageChange={() => {}}
               categoryKey={activeCategory}
             />
           </div>
