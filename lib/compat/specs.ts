@@ -170,8 +170,8 @@ function expandSocketPrefixes(text: string): string {
   const re = /((?:\bLGA\b|\bFCLGA\b|\bSocket\b)\s*)(\d{2,4}[A-Za-z0-9]*?(?:\s*(?:\/|,)\s*\d{2,4}[A-Za-z0-9]*)+)/gi;
 
   return text.replace(re, (match, prefix, list) => {
-    const parts = list.split(/(?:\/|,)/).map(p => p.trim()).filter(Boolean);
-    const expanded = parts.map(p => `${prefix}${p}`).join(' / ');
+    const parts = list.split(/(?:\/|,)/).map((p: string) => p.trim()).filter(Boolean);
+    const expanded = parts.map((p: string) => `${prefix}${p}`).join(' / ');
     return expanded;
   });
 }
