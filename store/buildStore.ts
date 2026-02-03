@@ -187,8 +187,11 @@ export const useBuildStore = create<BuildState>()(
           let adjustedRam: ProductWithQuantity[] = [];
           
           if (Array.isArray(currentRam) && currentRam.length > 0) {
-            // Count total RAM sticks
-            const totalRamSticks = currentRam.reduce((sum, item) => sum + item.quantity, 0);
+            // Count total RAM sticks (considering kits)
+            const totalRamSticks = currentRam.reduce((sum, item) => {
+              const modulesInKit = item.product.spec.memoryModules ?? 1;
+              return sum + (item.quantity * modulesInKit);
+            }, 0);
             
             // If current RAM exceeds new motherboard's slots
             if (totalRamSticks > newMotherboardSlots) {
@@ -201,16 +204,20 @@ export const useBuildStore = create<BuildState>()(
               let slotsUsed = 0;
               
               for (const ramItem of currentRam) {
+                const modulesInKit = ramItem.product.spec.memoryModules ?? 1;
                 const slotsAvailable = newMotherboardSlots - slotsUsed;
                 if (slotsAvailable <= 0) break;
                 
-                const quantityToKeep = Math.min(ramItem.quantity, slotsAvailable);
+                // Calculate how many kits can fit
+                const maxKits = Math.floor(slotsAvailable / modulesInKit);
+                const quantityToKeep = Math.min(ramItem.quantity, maxKits);
+                
                 if (quantityToKeep > 0) {
                   adjustedRam.push({
                     ...ramItem,
                     quantity: quantityToKeep,
                   });
-                  slotsUsed += quantityToKeep;
+                  slotsUsed += quantityToKeep * modulesInKit;
                 }
               }
             } else {
@@ -468,7 +475,7 @@ export const useBuildStore = create<BuildState>()(
           const updatedParts = currentParts
             .map(item => 
               item.product.product.id === productId
-                ? { ...item, quantity: Math.max(1, item.quantity - 1) }
+                ? { ...item, quantity: item.quantity - 1 }
                 : item
             )
             .filter(item => item.quantity > 0);
@@ -534,10 +541,18 @@ export const useBuildStore = create<BuildState>()(
         const { parts } = get();
         let count = 0;
         
-        for (const part of Object.values(parts)) {
+        for (const [category, part] of Object.entries(parts)) {
           if (Array.isArray(part)) {
-            // Count total units (items * quantity)
-            count += part.reduce((sum, item) => sum + item.quantity, 0);
+            // For RAM, count each module in kits
+            if (category === 'ram') {
+              count += part.reduce((sum, item) => {
+                const modulesInKit = item.product.spec.memoryModules ?? 1;
+                return sum + (item.quantity * modulesInKit);
+              }, 0);
+            } else {
+              // For other categories, count total units (items * quantity)
+              count += part.reduce((sum, item) => sum + item.quantity, 0);
+            }
           } else if (part !== null) {
             count++;
           }
@@ -610,11 +625,20 @@ export function useProductQuantity(category: CategoryKey, productId: string): nu
 
 /**
  * Hook to get the total quantity of items in a multi-select category
+ * For RAM, accounts for kits (e.g., 2x24GB counts as 2 modules)
  */
 export function useTotalQuantity(category: CategoryKey): number {
   return useBuildStore((state) => {
     const part = state.parts[category];
     if (Array.isArray(part)) {
+      // For RAM, multiply by number of modules in kit
+      if (category === 'ram') {
+        return part.reduce((sum, item) => {
+          const modulesInKit = item.product.spec.memoryModules ?? 1;
+          return sum + (item.quantity * modulesInKit);
+        }, 0);
+      }
+      // For other categories, just sum quantities
       return part.reduce((sum, item) => sum + item.quantity, 0);
     }
     return 0;

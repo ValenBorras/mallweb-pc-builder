@@ -70,7 +70,7 @@ export function PCBuilder() {
   }
 
   // Load products for category
-  const loadCategoryProducts = useCallback(async () => {
+  const loadCategoryProducts = useCallback(async (signal: AbortSignal, categoryKey: CategoryKey) => {
     setIsLoading(true);
     setError(undefined);
 
@@ -84,6 +84,11 @@ export function PCBuilder() {
       const MAX_PAGES = 3;
       
       while (hasMorePages && currentLoadPage <= MAX_PAGES) {
+        // Check if request was aborted before making the fetch
+        if (signal.aborted) {
+          return;
+        }
+
         const response = await fetch('/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -92,6 +97,7 @@ export function PCBuilder() {
             page: currentLoadPage,
             resultsPerPage: 50,
           }),
+          signal, // Pass abort signal to fetch
         });
 
         if (!response.ok) {
@@ -100,6 +106,12 @@ export function PCBuilder() {
         }
 
         const data = await response.json();
+        
+        // Check if request was aborted after receiving data
+        if (signal.aborted) {
+          return;
+        }
+        
         allLoadedProducts = [...allLoadedProducts, ...data.products];
         
         // Check if there are more pages
@@ -107,14 +119,28 @@ export function PCBuilder() {
         currentLoadPage++;
       }
 
-      // Filter by category immediately
-      const categoryFiltered = filterProductsByCategory(allLoadedProducts, activeCategory);
-      setAllProducts(categoryFiltered);
+      // Final check: only update state if this request is still valid for the current category
+      if (!signal.aborted && categoryKey === activeCategory) {
+        // Filter by category immediately
+        const categoryFiltered = filterProductsByCategory(allLoadedProducts, categoryKey);
+        setAllProducts(categoryFiltered);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-      setAllProducts([]);
+      // Don't show errors for aborted requests
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+      
+      // Only set error if request wasn't aborted
+      if (!signal.aborted) {
+        setError(err instanceof Error ? err.message : 'Error desconocido');
+        setAllProducts([]);
+      }
     } finally {
-      setIsLoading(false);
+      // Only update loading state if request wasn't aborted
+      if (!signal.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [category.searchKeywords, activeCategory]);
 
@@ -171,8 +197,21 @@ export function PCBuilder() {
 
   // Load initial products when category changes
   useEffect(() => {
+    // Create abort controller for this request
+    const abortController = new AbortController();
+    
+    // Reset search query and clear products immediately when category changes
     setSearchQuery('');
-    loadCategoryProducts();
+    setAllProducts([]);
+    setFilteredProducts([]);
+    
+    // Load products for the new category
+    loadCategoryProducts(abortController.signal, activeCategory);
+    
+    // Cleanup: abort the request if category changes before it completes
+    return () => {
+      abortController.abort();
+    };
   }, [activeCategory, loadCategoryProducts]);
 
   useEffect(() => {
@@ -332,7 +371,10 @@ export function PCBuilder() {
       setTimeout(() => {
         const updatedRamQuantity = useBuildStore.getState().parts.ram;
         const totalRamItems = Array.isArray(updatedRamQuantity) 
-          ? updatedRamQuantity.reduce((sum, item) => sum + item.quantity, 0)
+          ? updatedRamQuantity.reduce((sum, item) => {
+              const modulesInKit = item.product.spec.memoryModules ?? 1;
+              return sum + (item.quantity * modulesInKit);
+            }, 0)
           : 0;
         
         if (totalRamItems >= maxRamSlots) {
